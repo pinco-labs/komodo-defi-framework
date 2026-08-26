@@ -4867,11 +4867,26 @@ pub enum CoinProtocol {
     },
     ZHTLC(ZcoinProtocolInfo),
     SIA,
+    MINTLAYER,
     NFT {
         platform: String,
     },
     SOLANA(solana::SolanaProtocolInfo),
     SOLANATOKEN(solana::SolanaTokenProtocolInfo),
+}
+
+#[cfg(test)]
+mod mintlayer_protocol_tests {
+    use super::CoinProtocol;
+
+    #[test]
+    fn test_mintlayer_coin_protocol_serde() {
+        let protocol_json = serde_json::json!({"type": "MINTLAYER"});
+        let protocol: CoinProtocol = serde_json::from_value(protocol_json.clone()).unwrap();
+
+        assert!(matches!(protocol, CoinProtocol::MINTLAYER));
+        assert_eq!(serde_json::to_value(protocol).unwrap(), protocol_json);
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Display, PartialEq, Serialize)]
@@ -4915,7 +4930,7 @@ impl CoinProtocol {
             | CoinProtocol::BCH { .. }
             | CoinProtocol::TENDERMINT(_)
             | CoinProtocol::ZHTLC(_) => None,
-            CoinProtocol::SIA => None,
+            CoinProtocol::SIA | CoinProtocol::MINTLAYER => None,
             CoinProtocol::SOLANA(_) => None,
             CoinProtocol::SOLANATOKEN(info) => Some(&info.platform),
         }
@@ -4939,7 +4954,7 @@ impl CoinProtocol {
             | CoinProtocol::NFT { .. } => None,
             #[cfg(not(target_arch = "wasm32"))]
             CoinProtocol::LIGHTNING { .. } => None,
-            CoinProtocol::SIA => None,
+            CoinProtocol::SIA | CoinProtocol::MINTLAYER => None,
             CoinProtocol::SOLANA(_) => None,
             CoinProtocol::SOLANATOKEN(info) => Some(info.mint_address.to_string()),
         }
@@ -5295,6 +5310,7 @@ pub async fn lp_coininit(ctx: &MmArc, ticker: &str, req: &Json) -> Result<MmCoin
             let params = try_s!(SiaCoinActivationRequest::from_legacy_req(req));
             try_s!(SiaCoin::new(ctx, coins_en, &params, priv_key_policy).await).into()
         },
+        CoinProtocol::MINTLAYER => return ERR!("MINTLAYER protocol is not supported by legacy lp_coininit"),
         CoinProtocol::SOLANA(_) => return ERR!("SOLANA is not supported by lp_coininit"),
         CoinProtocol::SOLANATOKEN(_) => return ERR!("SOLANATOKEN is not supported by lp_coininit"),
     };
@@ -5958,6 +5974,7 @@ pub fn address_by_coin_conf_and_pubkey_str(
         // this will require significant changes and this function is only called from "legacy" dispatcher's `orderbook` rpc
         // so it's not a priority right now
         CoinProtocol::SIA => ERR!("address_by_coin_conf_and_pubkey_str is not supported for SIA protocol!"),
+        CoinProtocol::MINTLAYER => ERR!("address_by_coin_conf_and_pubkey_str is not implemented for MINTLAYER yet."),
         CoinProtocol::SOLANA(_) => ERR!("address_by_coin_conf_and_pubkey_str is not implemented for SOLANA yet."),
         CoinProtocol::SOLANATOKEN(_) => {
             ERR!("address_by_coin_conf_and_pubkey_str is not implemented for SOLANATOKEN yet.")
