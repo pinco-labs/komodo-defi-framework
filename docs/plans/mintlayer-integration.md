@@ -39,7 +39,7 @@ data and transaction broadcasting.
 - [x] Add the Mintlayer module.
 - [x] Add `CoinProtocol::MINTLAYER`.
 - [ ] Add `MintlayerCoin` to `MmCoinEnum`.
-- [ ] Define typed configuration and activation request structures.
+- [x] Define typed configuration and activation request structures.
 - [ ] Compile with unsupported operations returning explicit typed errors.
 - [x] Add serialization and protocol parsing tests.
 - [x] Define initial typed Mintlayer API response structures and schema tests.
