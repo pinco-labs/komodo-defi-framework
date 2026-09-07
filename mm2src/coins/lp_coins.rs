@@ -296,6 +296,7 @@ use utxo::utxo_common::{big_decimal_from_sat_unsigned, payment_script, WaitForOu
 use utxo::utxo_standard::{utxo_standard_coin_with_policy, UtxoStandardCoin};
 use utxo::{swap_proto_v2_scripts, BlockchainNetwork, GenerateTxError, UtxoActivationParams, UtxoFeeDetails, UtxoTx};
 
+pub mod mintlayer;
 pub mod nft;
 use nft::nft_errors::GetNftInfoError;
 use script::Script;

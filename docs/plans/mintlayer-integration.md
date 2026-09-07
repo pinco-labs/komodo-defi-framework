@@ -36,12 +36,13 @@ data and transaction broadcasting.
 
 ## Milestone 1 — Protocol scaffold
 
-- Add the Mintlayer module.
-- Add `CoinProtocol::MINTLAYER`.
-- Add `MintlayerCoin` to `MmCoinEnum`.
-- Define typed configuration and activation request structures.
-- Compile with unsupported operations returning explicit typed errors.
-- Add serialization and protocol parsing tests.
+- [x] Add the Mintlayer module.
+- [x] Add `CoinProtocol::MINTLAYER`.
+- [ ] Add `MintlayerCoin` to `MmCoinEnum`.
+- [ ] Define typed configuration and activation request structures.
+- [ ] Compile with unsupported operations returning explicit typed errors.
+- [x] Add serialization and protocol parsing tests.
+- [x] Define initial typed Mintlayer API response structures and schema tests.
 
 ## Milestone 2 — Read-only activation
 
