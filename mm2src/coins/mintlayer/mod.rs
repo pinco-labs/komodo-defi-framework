@@ -4,10 +4,11 @@ pub mod config;
 pub mod types;
 
 pub use api_client::{MintlayerApiClient, MintlayerApiError, MintlayerEndpointError, MintlayerEndpointFailure};
-pub use coin::{MintlayerCoin, MintlayerCoinBuildError, MINTLAYER_DECIMALS};
+pub use coin::{MintlayerCoin, MintlayerCoinBuildError, MintlayerNetworkValidationError, MINTLAYER_DECIMALS};
 pub use config::{
     MintlayerActivationRequest, MintlayerApiClientConfig, MintlayerCoinConf, MintlayerNetwork, MintlayerProtocolInfo,
 };
 pub use types::{
-    MintlayerAddressInfo, MintlayerAmount, MintlayerChainTip, MintlayerOutPoint, MintlayerTokenBalance, MintlayerUtxo,
+    MintlayerAddressInfo, MintlayerAmount, MintlayerChainTip, MintlayerGenesisInfo, MintlayerOutPoint,
+    MintlayerTokenBalance, MintlayerUtxo,
 };

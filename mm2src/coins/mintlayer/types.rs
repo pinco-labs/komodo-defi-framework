@@ -16,6 +16,12 @@ pub struct MintlayerChainTip {
     pub block_id: String,
 }
 
+/// Minimal information required to identify the network exposed by an API.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct MintlayerGenesisInfo {
+    pub block_id: String,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct MintlayerTokenBalance {
     pub token_id: String,
@@ -48,6 +54,26 @@ pub struct MintlayerUtxo {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn deserialize_genesis_info_ignores_unneeded_fields() {
+        let response = json!({
+            "block_id":
+                "2cf01f196066bb6f3a4856deb7999294ff520f633fe48e118e8044390e409870",
+            "genesis_message": "Mintlayer mainnet",
+            "timestamp": {
+                "timestamp": 1706468400
+            },
+            "utxos": []
+        });
+
+        let genesis: MintlayerGenesisInfo = serde_json::from_value(response).unwrap();
+
+        assert_eq!(
+            genesis.block_id,
+            "2cf01f196066bb6f3a4856deb7999294ff520f633fe48e118e8044390e409870"
+        );
+    }
 
     #[test]
     fn deserialize_chain_tip() {

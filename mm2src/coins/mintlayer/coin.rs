@@ -44,6 +44,26 @@ pub enum MintlayerCoinBuildError {
     InvalidRequiredConfirmations,
 }
 
+#[derive(Debug, Display)]
+pub enum MintlayerNetworkValidationError {
+    #[display(fmt = "Mintlayer API request failed: {}", _0)]
+    Api(MintlayerApiError),
+    #[display(fmt = "Mintlayer API returned invalid genesis block ID '{}'", actual)]
+    InvalidGenesisBlockId { actual: String },
+    #[display(
+        fmt = "Unexpected Mintlayer genesis block ID: expected '{}', found '{}'",
+        expected,
+        actual
+    )]
+    UnexpectedGenesisBlockId { expected: String, actual: String },
+}
+
+impl From<MintlayerApiError> for MintlayerNetworkValidationError {
+    fn from(error: MintlayerApiError) -> Self {
+        MintlayerNetworkValidationError::Api(error)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct MintlayerCoin(Arc<MintlayerCoinImpl>);
 
@@ -121,6 +141,12 @@ impl MintlayerCoin {
         &self.api_client
     }
 
+    /// Verifies that the configured genesis belongs to the network served by the API.
+    pub async fn validate_network(&self) -> Result<(), MintlayerNetworkValidationError> {
+        let genesis = self.api_client.genesis().await?;
+        validate_api_genesis_block_id(self.genesis_block_id(), &genesis.block_id)
+    }
+
     pub async fn chain_tip(&self) -> Result<MintlayerChainTip, MintlayerApiError> {
         self.api_client.chain_tip().await
     }
@@ -151,15 +177,33 @@ impl MintlayerCoin {
     }
 }
 
+fn is_valid_genesis_block_id(genesis_block_id: &str) -> bool {
+    genesis_block_id.len() == 64
+        && hex::decode(genesis_block_id)
+            .map(|bytes| bytes.len() == 32)
+            .unwrap_or(false)
+}
+
 fn validate_genesis_block_id(genesis_block_id: &str) -> Result<(), MintlayerCoinBuildError> {
-    if genesis_block_id.len() != 64 {
+    if !is_valid_genesis_block_id(genesis_block_id) {
         return Err(MintlayerCoinBuildError::InvalidGenesisBlockId);
     }
 
-    let bytes = hex::decode(genesis_block_id).map_err(|_| MintlayerCoinBuildError::InvalidGenesisBlockId)?;
+    Ok(())
+}
 
-    if bytes.len() != 32 {
-        return Err(MintlayerCoinBuildError::InvalidGenesisBlockId);
+fn validate_api_genesis_block_id(expected: &str, actual: &str) -> Result<(), MintlayerNetworkValidationError> {
+    if !is_valid_genesis_block_id(actual) {
+        return Err(MintlayerNetworkValidationError::InvalidGenesisBlockId {
+            actual: actual.to_owned(),
+        });
+    }
+
+    if !expected.eq_ignore_ascii_case(actual) {
+        return Err(MintlayerNetworkValidationError::UnexpectedGenesisBlockId {
+            expected: expected.to_owned(),
+            actual: actual.to_owned(),
+        });
     }
 
     Ok(())
@@ -274,6 +318,42 @@ mod tests {
 
         assert_eq!(result, Err(MintlayerCoinBuildError::InvalidRequiredConfirmations));
         assert_eq!(coin.required_confirmations(), 2);
+    }
+
+    #[test]
+    fn accept_matching_api_genesis_block_id_case_insensitively() {
+        let expected = "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd";
+        let actual = expected.to_uppercase();
+
+        assert!(validate_api_genesis_block_id(expected, &actual).is_ok());
+    }
+
+    #[test]
+    fn reject_invalid_api_genesis_block_id() {
+        let expected = "a".repeat(64);
+
+        let error = validate_api_genesis_block_id(&expected, "not-a-block-id").unwrap_err();
+
+        assert!(matches!(
+            error,
+            MintlayerNetworkValidationError::InvalidGenesisBlockId { .. }
+        ));
+    }
+
+    #[test]
+    fn reject_unexpected_api_genesis_block_id() {
+        let expected = "a".repeat(64);
+        let actual = "b".repeat(64);
+
+        let error = validate_api_genesis_block_id(&expected, &actual).unwrap_err();
+
+        assert!(matches!(
+            error,
+            MintlayerNetworkValidationError::UnexpectedGenesisBlockId {
+                expected: error_expected,
+                actual: error_actual,
+            } if error_expected == expected && error_actual == actual
+        ));
     }
 
     #[test]

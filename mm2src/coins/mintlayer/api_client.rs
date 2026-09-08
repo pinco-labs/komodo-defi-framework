@@ -1,4 +1,4 @@
-use crate::mintlayer::{MintlayerAddressInfo, MintlayerChainTip, MintlayerUtxo};
+use crate::mintlayer::{MintlayerAddressInfo, MintlayerChainTip, MintlayerGenesisInfo, MintlayerUtxo};
 use async_std::prelude::FutureExt;
 use async_trait::async_trait;
 use compatible_time::Duration;
@@ -103,6 +103,10 @@ where
 
     pub fn api_urls(&self) -> &[Url] {
         &self.api_urls
+    }
+
+    pub async fn genesis(&self) -> Result<MintlayerGenesisInfo, MintlayerApiError> {
+        self.get_json(&["chain", "genesis"]).await
     }
 
     pub async fn chain_tip(&self) -> Result<MintlayerChainTip, MintlayerApiError> {
@@ -273,6 +277,31 @@ mod tests {
             MintlayerApiClientGeneric::with_transport(api_urls, Arc::clone(&transport), Duration::from_secs(1));
 
         (client, transport)
+    }
+
+    #[test]
+    fn deserialize_genesis_from_first_endpoint() {
+        let response = br#"{
+            "block_id": "2cf01f196066bb6f3a4856deb7999294ff520f633fe48e118e8044390e409870",
+            "genesis_message": "Mintlayer mainnet",
+            "timestamp": { "timestamp": 1706468400 },
+            "utxos": []
+        }"#
+        .to_vec();
+
+        let (client, transport) =
+            client_with_responses(vec![api_url("api-1.example")], vec![Ok((StatusCode::OK, response))]);
+
+        let genesis = block_on(client.genesis()).unwrap();
+
+        assert_eq!(
+            genesis.block_id,
+            "2cf01f196066bb6f3a4856deb7999294ff520f633fe48e118e8044390e409870"
+        );
+        assert_eq!(
+            transport.requested_urls(),
+            vec!["https://api-1.example/api/v2/chain/genesis"]
+        );
     }
 
     #[test]

@@ -47,8 +47,8 @@ data and transaction broadcasting.
 ## Milestone 2 — Read-only activation
 
 - [x] Implement Mintlayer API client.
-- Validate network and genesis block.
-- Obtain current block height.
+- [x] Validate network and genesis block.
+- [x] Obtain current block height.
 - Derive and display a Mintlayer address locally.
 - Query address balance and UTXOs.
 - Implement task-based standalone activation.
