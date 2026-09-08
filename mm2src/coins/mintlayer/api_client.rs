@@ -59,6 +59,7 @@ impl MintlayerHttpTransport for KdfMintlayerHttpTransport {
     }
 }
 
+#[derive(Debug)]
 pub struct MintlayerApiClientGeneric<T> {
     api_urls: Vec<Url>,
     transport: Arc<T>,

@@ -1,4 +1,7 @@
-use crate::mintlayer::{MintlayerActivationRequest, MintlayerCoinConf, MintlayerNetwork};
+use crate::mintlayer::{
+    MintlayerActivationRequest, MintlayerAddressInfo, MintlayerApiClient, MintlayerApiError, MintlayerChainTip,
+    MintlayerCoinConf, MintlayerNetwork, MintlayerUtxo,
+};
 use derive_more::Display;
 use std::collections::HashSet;
 use std::ops::Deref;
@@ -56,6 +59,7 @@ impl Deref for MintlayerCoin {
 pub struct MintlayerCoinImpl {
     conf: MintlayerCoinConf,
     api_urls: Vec<Url>,
+    api_client: MintlayerApiClient,
     tx_history: bool,
     required_confirmations: AtomicU64,
 }
@@ -76,6 +80,7 @@ impl MintlayerCoin {
         validate_genesis_block_id(&conf.genesis_block_id)?;
 
         let api_urls = validate_api_urls(&request.client_conf.api_urls)?;
+        let api_client = MintlayerApiClient::new(api_urls.clone());
 
         let required_confirmations = request.required_confirmations.unwrap_or(conf.required_confirmations);
 
@@ -86,6 +91,7 @@ impl MintlayerCoin {
         Ok(MintlayerCoin(Arc::new(MintlayerCoinImpl {
             conf,
             api_urls,
+            api_client,
             tx_history: request.tx_history,
             required_confirmations: AtomicU64::new(required_confirmations),
         })))
@@ -109,6 +115,22 @@ impl MintlayerCoin {
 
     pub fn api_urls(&self) -> &[Url] {
         &self.api_urls
+    }
+
+    pub fn api_client(&self) -> &MintlayerApiClient {
+        &self.api_client
+    }
+
+    pub async fn chain_tip(&self) -> Result<MintlayerChainTip, MintlayerApiError> {
+        self.api_client.chain_tip().await
+    }
+
+    pub async fn address_info(&self, address: &str) -> Result<MintlayerAddressInfo, MintlayerApiError> {
+        self.api_client.address_info(address).await
+    }
+
+    pub async fn spendable_utxos(&self, address: &str) -> Result<Vec<MintlayerUtxo>, MintlayerApiError> {
+        self.api_client.spendable_utxos(address).await
     }
 
     pub fn tx_history_enabled(&self) -> bool {
@@ -230,6 +252,7 @@ mod tests {
         assert_eq!(coin.decimals(), MINTLAYER_DECIMALS);
         assert_eq!(coin.required_confirmations(), 2);
         assert_eq!(coin.api_urls().len(), 2);
+        assert_eq!(coin.api_client().api_urls(), coin.api_urls());
     }
 
     #[test]
