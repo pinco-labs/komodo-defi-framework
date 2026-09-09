@@ -946,6 +946,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "base64 0.21.7",
+ "bech32",
  "bincode",
  "bip32",
  "bitcoin",
