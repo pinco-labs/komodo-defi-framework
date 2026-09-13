@@ -1,9 +1,15 @@
 use crate::mintlayer::{
-    MintlayerActivationRequest, MintlayerAddressInfo, MintlayerApiClient, MintlayerApiError, MintlayerChainTip,
-    MintlayerCoinConf, MintlayerNetwork, MintlayerUtxo,
+    mintlayer_address_from_compressed_public_key, mintlayer_derivation_path, MintlayerActivationRequest,
+    MintlayerAddressInfo, MintlayerApiClient, MintlayerApiError, MintlayerChainTip, MintlayerCoinConf,
+    MintlayerNetwork, MintlayerUtxo,
 };
+use crate::{DerivationMethodResponse, PrivKeyBuildPolicy};
+use crypto::privkey::key_pair_from_secret;
+use crypto::Bip44Chain;
 use derive_more::Display;
+use keys::KeyPair;
 use std::collections::HashSet;
+use std::fmt;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -42,6 +48,14 @@ pub enum MintlayerCoinBuildError {
         index: usize,
     },
     InvalidRequiredConfirmations,
+    #[display(fmt = "Failed to derive Mintlayer key: {}", _0)]
+    KeyDerivation(String),
+    #[display(fmt = "Failed to derive Mintlayer address: {}", _0)]
+    AddressDerivation(String),
+    #[display(fmt = "Unsupported Mintlayer private key policy: {}", policy)]
+    UnsupportedPrivKeyPolicy {
+        policy: &'static str,
+    },
 }
 
 #[derive(Debug, Display)]
@@ -75,17 +89,42 @@ impl Deref for MintlayerCoin {
     }
 }
 
-#[derive(Debug)]
 pub struct MintlayerCoinImpl {
     conf: MintlayerCoinConf,
     api_urls: Vec<Url>,
     api_client: MintlayerApiClient,
     tx_history: bool,
     required_confirmations: AtomicU64,
+    key_pair: KeyPair,
+    address: String,
+    derivation_method: DerivationMethodResponse,
+}
+
+impl fmt::Debug for MintlayerCoinImpl {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("MintlayerCoinImpl")
+            .field("conf", &self.conf)
+            .field("api_urls", &self.api_urls)
+            .field("tx_history", &self.tx_history)
+            .field(
+                "required_confirmations",
+                &self.required_confirmations.load(Ordering::Relaxed),
+            )
+            .field("key_pair", &"<redacted>")
+            .field("public_key", &hex::encode(self.key_pair.public_slice()))
+            .field("address", &self.address)
+            .field("derivation_method", &self.derivation_method)
+            .finish()
+    }
 }
 
 impl MintlayerCoin {
-    pub fn new(conf: MintlayerCoinConf, request: MintlayerActivationRequest) -> Result<Self, MintlayerCoinBuildError> {
+    pub fn new(
+        conf: MintlayerCoinConf,
+        request: MintlayerActivationRequest,
+        priv_key_build_policy: PrivKeyBuildPolicy,
+    ) -> Result<Self, MintlayerCoinBuildError> {
         if conf.ticker.trim().is_empty() {
             return Err(MintlayerCoinBuildError::EmptyTicker);
         }
@@ -108,12 +147,17 @@ impl MintlayerCoin {
             return Err(MintlayerCoinBuildError::InvalidRequiredConfirmations);
         }
 
+        let (key_pair, address, derivation_method) = build_mintlayer_identity(conf.network, priv_key_build_policy)?;
+
         Ok(MintlayerCoin(Arc::new(MintlayerCoinImpl {
             conf,
             api_urls,
             api_client,
             tx_history: request.tx_history,
             required_confirmations: AtomicU64::new(required_confirmations),
+            key_pair,
+            address,
+            derivation_method,
         })))
     }
 
@@ -139,6 +183,18 @@ impl MintlayerCoin {
 
     pub fn api_client(&self) -> &MintlayerApiClient {
         &self.api_client
+    }
+
+    pub fn address(&self) -> &str {
+        &self.address
+    }
+
+    pub fn public_key(&self) -> &[u8] {
+        self.key_pair.public_slice()
+    }
+
+    pub fn derivation_method(&self) -> &DerivationMethodResponse {
+        &self.derivation_method
     }
 
     /// Verifies that the configured genesis belongs to the network served by the API.
@@ -175,6 +231,39 @@ impl MintlayerCoin {
         self.required_confirmations.store(confirmations, Ordering::Relaxed);
         Ok(())
     }
+}
+
+fn build_mintlayer_identity(
+    network: MintlayerNetwork,
+    priv_key_build_policy: PrivKeyBuildPolicy,
+) -> Result<(KeyPair, String, DerivationMethodResponse), MintlayerCoinBuildError> {
+    let (secret, derivation_method) = match priv_key_build_policy {
+        PrivKeyBuildPolicy::IguanaPrivKey(secret) => (secret, DerivationMethodResponse::Iguana),
+        PrivKeyBuildPolicy::GlobalHDAccount(global_hd_account) => {
+            let derivation_path = mintlayer_derivation_path(network, 0, Bip44Chain::External, 0)
+                .map_err(|error| MintlayerCoinBuildError::KeyDerivation(error.to_string()))?;
+            let secret = global_hd_account
+                .derive_secp256k1_secret(&derivation_path)
+                .map_err(|error| MintlayerCoinBuildError::KeyDerivation(error.to_string()))?;
+
+            (secret, DerivationMethodResponse::HDWallet(derivation_path.to_string()))
+        },
+        PrivKeyBuildPolicy::Trezor => {
+            return Err(MintlayerCoinBuildError::UnsupportedPrivKeyPolicy { policy: "Trezor" })
+        },
+        PrivKeyBuildPolicy::WalletConnect { .. } => {
+            return Err(MintlayerCoinBuildError::UnsupportedPrivKeyPolicy {
+                policy: "WalletConnect",
+            })
+        },
+    };
+
+    let key_pair = key_pair_from_secret(&secret.take())
+        .map_err(|error| MintlayerCoinBuildError::KeyDerivation(error.to_string()))?;
+    let address = mintlayer_address_from_compressed_public_key(network, key_pair.public_slice())
+        .map_err(|error| MintlayerCoinBuildError::AddressDerivation(error.to_string()))?;
+
+    Ok((key_pair, address, derivation_method))
 }
 
 fn is_valid_genesis_block_id(genesis_block_id: &str) -> bool {
@@ -263,6 +352,11 @@ fn is_loopback(url: &Url) -> bool {
 mod tests {
     use super::*;
     use crate::mintlayer::MintlayerApiClientConfig;
+    use crypto::{CryptoCtx, KeyPairPolicy};
+    use mm2_core::mm_ctx::MmCtxBuilder;
+
+    const TEST_MNEMONIC: &str =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
     fn valid_conf() -> MintlayerCoinConf {
         MintlayerCoinConf {
@@ -282,6 +376,10 @@ mod tests {
         }
     }
 
+    fn iguana_policy() -> PrivKeyBuildPolicy {
+        PrivKeyBuildPolicy::IguanaPrivKey([1_u8; 32].into())
+    }
+
     #[test]
     fn build_valid_coin() {
         let request = request_with_urls(vec![
@@ -289,7 +387,7 @@ mod tests {
             concat!("http", "://127.0.0.1:3000").into(),
         ]);
 
-        let coin = MintlayerCoin::new(valid_conf(), request).unwrap();
+        let coin = MintlayerCoin::new(valid_conf(), request, iguana_policy()).unwrap();
 
         assert_eq!(coin.ticker(), "ML");
         assert_eq!(coin.network(), MintlayerNetwork::Mainnet);
@@ -297,6 +395,75 @@ mod tests {
         assert_eq!(coin.required_confirmations(), 2);
         assert_eq!(coin.api_urls().len(), 2);
         assert_eq!(coin.api_client().api_urls(), coin.api_urls());
+        assert_eq!(
+            hex::encode(coin.public_key()),
+            "031b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f"
+        );
+        assert_eq!(
+            coin.address(),
+            mintlayer_address_from_compressed_public_key(MintlayerNetwork::Mainnet, coin.public_key()).unwrap()
+        );
+        assert!(matches!(coin.derivation_method(), DerivationMethodResponse::Iguana));
+    }
+
+    #[test]
+    fn build_global_hd_identity_at_default_address_path() {
+        let ctx = MmCtxBuilder::default().into_mm_arc();
+        let crypto_ctx = CryptoCtx::init_with_global_hd_account(ctx, TEST_MNEMONIC).unwrap();
+        let global_hd_account = match crypto_ctx.key_pair_policy() {
+            KeyPairPolicy::GlobalHDAccount(account) => account.clone(),
+            KeyPairPolicy::Iguana => panic!("expected GlobalHDAccount policy"),
+        };
+
+        let expected_path = mintlayer_derivation_path(MintlayerNetwork::Mainnet, 0, Bip44Chain::External, 0).unwrap();
+        let expected_secret = global_hd_account.derive_secp256k1_secret(&expected_path).unwrap();
+        let expected_key_pair = key_pair_from_secret(&expected_secret.take()).unwrap();
+        let expected_address =
+            mintlayer_address_from_compressed_public_key(MintlayerNetwork::Mainnet, expected_key_pair.public_slice())
+                .unwrap();
+
+        let coin = MintlayerCoin::new(
+            valid_conf(),
+            request_with_urls(vec![concat!("https", "://api.example").into()]),
+            PrivKeyBuildPolicy::GlobalHDAccount(global_hd_account),
+        )
+        .unwrap();
+
+        assert_eq!(coin.public_key(), expected_key_pair.public_slice());
+        assert_eq!(coin.address(), expected_address);
+        assert!(matches!(
+            coin.derivation_method(),
+            DerivationMethodResponse::HDWallet(path) if path == &expected_path.to_string()
+        ));
+    }
+
+    #[test]
+    fn debug_redacts_private_key() {
+        let coin = MintlayerCoin::new(
+            valid_conf(),
+            request_with_urls(vec![concat!("https", "://api.example").into()]),
+            iguana_policy(),
+        )
+        .unwrap();
+
+        let debug = format!("{coin:?}");
+
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains(&"01".repeat(32)));
+    }
+
+    #[test]
+    fn reject_trezor_private_key_policy() {
+        let result = MintlayerCoin::new(
+            valid_conf(),
+            request_with_urls(vec![concat!("https", "://api.example").into()]),
+            PrivKeyBuildPolicy::Trezor,
+        );
+
+        assert!(matches!(
+            result,
+            Err(MintlayerCoinBuildError::UnsupportedPrivKeyPolicy { policy: "Trezor" })
+        ));
     }
 
     #[test]
@@ -304,7 +471,7 @@ mod tests {
         let mut request = request_with_urls(vec![concat!("https", "://api.example").into()]);
         request.required_confirmations = Some(5);
 
-        let coin = MintlayerCoin::new(valid_conf(), request).unwrap();
+        let coin = MintlayerCoin::new(valid_conf(), request, iguana_policy()).unwrap();
 
         assert_eq!(coin.required_confirmations(), 5);
     }
@@ -312,7 +479,7 @@ mod tests {
     #[test]
     fn reject_zero_confirmations_in_setter() {
         let request = request_with_urls(vec![concat!("https", "://api.example").into()]);
-        let coin = MintlayerCoin::new(valid_conf(), request).unwrap();
+        let coin = MintlayerCoin::new(valid_conf(), request, iguana_policy()).unwrap();
 
         let result = coin.set_required_confirmations(0);
 
@@ -361,7 +528,11 @@ mod tests {
         let mut conf = valid_conf();
         conf.genesis_block_id = "not-a-block-id".into();
 
-        let result = MintlayerCoin::new(conf, request_with_urls(vec![concat!("https", "://api.example").into()]));
+        let result = MintlayerCoin::new(
+            conf,
+            request_with_urls(vec![concat!("https", "://api.example").into()]),
+            iguana_policy(),
+        );
 
         assert!(matches!(result, Err(MintlayerCoinBuildError::InvalidGenesisBlockId)));
     }
@@ -371,6 +542,7 @@ mod tests {
         let result = MintlayerCoin::new(
             valid_conf(),
             request_with_urls(vec![concat!("http", "://api.example").into()]),
+            iguana_policy(),
         );
 
         assert!(matches!(
@@ -384,6 +556,7 @@ mod tests {
         let result = MintlayerCoin::new(
             valid_conf(),
             request_with_urls(vec![concat!("https", "://user:password@api.example").into()]),
+            iguana_policy(),
         );
 
         assert!(matches!(
@@ -400,6 +573,7 @@ mod tests {
                 concat!("https", "://api.example").into(),
                 concat!("https", "://api.example/").into(),
             ]),
+            iguana_policy(),
         );
 
         assert!(matches!(
