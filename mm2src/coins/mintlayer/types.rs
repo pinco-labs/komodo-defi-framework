@@ -1,5 +1,22 @@
+use derive_more::Display;
+use mm2_number::{BigDecimal, BigInt};
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value as Json;
+use std::str::FromStr;
+
+pub const MINTLAYER_AMOUNT_DECIMALS: i64 = 11;
+
+#[derive(Debug, Display, PartialEq)]
+pub enum MintlayerAmountConversionError {
+    #[display(fmt = "Invalid Mintlayer atoms amount '{}': {}", value, reason)]
+    InvalidAtoms { value: String, reason: String },
+    #[display(fmt = "Invalid Mintlayer decimal amount '{}': {}", value, reason)]
+    InvalidDecimal { value: String, reason: String },
+    #[display(fmt = "Mintlayer amount cannot be negative: atoms '{}'", atoms)]
+    NegativeAmount { atoms: String },
+    #[display(fmt = "Inconsistent Mintlayer amount: atoms '{}', decimal '{}'", atoms, decimal)]
+    InconsistentAmount { atoms: String, decimal: String },
+}
 
 /// Amount returned by the Mintlayer API.
 ///
@@ -8,6 +25,35 @@ use serde_json::Value as Json;
 pub struct MintlayerAmount {
     pub atoms: String,
     pub decimal: String,
+}
+
+impl MintlayerAmount {
+    pub fn to_big_decimal(&self) -> Result<BigDecimal, MintlayerAmountConversionError> {
+        let atoms = BigInt::from_str(&self.atoms).map_err(|error| MintlayerAmountConversionError::InvalidAtoms {
+            value: self.atoms.clone(),
+            reason: error.to_string(),
+        })?;
+        if atoms < BigInt::from(0) {
+            return Err(MintlayerAmountConversionError::NegativeAmount {
+                atoms: self.atoms.clone(),
+            });
+        }
+        let amount_from_atoms = BigDecimal::new(atoms, MINTLAYER_AMOUNT_DECIMALS);
+        let decimal =
+            BigDecimal::from_str(&self.decimal).map_err(|error| MintlayerAmountConversionError::InvalidDecimal {
+                value: self.decimal.clone(),
+                reason: error.to_string(),
+            })?;
+
+        if amount_from_atoms != decimal {
+            return Err(MintlayerAmountConversionError::InconsistentAmount {
+                atoms: self.atoms.clone(),
+                decimal: self.decimal.clone(),
+            });
+        }
+
+        Ok(amount_from_atoms)
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -111,6 +157,87 @@ mod tests {
         assert_eq!(info.locked_coin_balance.atoms, "0");
         assert!(info.tokens.is_empty());
         assert_eq!(serde_json::to_value(info).unwrap(), response);
+    }
+
+    #[test]
+    fn convert_consistent_amount_to_big_decimal() {
+        let amount = MintlayerAmount {
+            atoms: "6382564000000000".into(),
+            decimal: "63825.64".into(),
+        };
+
+        assert_eq!(
+            amount.to_big_decimal().unwrap(),
+            BigDecimal::from_str("63825.64").unwrap()
+        );
+    }
+
+    #[test]
+    fn accept_equivalent_decimal_with_trailing_zeroes() {
+        let amount = MintlayerAmount {
+            atoms: "6382564000000000".into(),
+            decimal: "63825.640".into(),
+        };
+
+        assert_eq!(
+            amount.to_big_decimal().unwrap(),
+            BigDecimal::from_str("63825.64").unwrap()
+        );
+    }
+
+    #[test]
+    fn reject_inconsistent_amount_representations() {
+        let amount = MintlayerAmount {
+            atoms: "6382564000000000".into(),
+            decimal: "63825.65".into(),
+        };
+
+        assert_eq!(
+            amount.to_big_decimal(),
+            Err(MintlayerAmountConversionError::InconsistentAmount {
+                atoms: amount.atoms,
+                decimal: amount.decimal,
+            })
+        );
+    }
+
+    #[test]
+    fn reject_invalid_atoms_amount() {
+        let amount = MintlayerAmount {
+            atoms: "not-an-integer".into(),
+            decimal: "0".into(),
+        };
+
+        assert!(matches!(
+            amount.to_big_decimal(),
+            Err(MintlayerAmountConversionError::InvalidAtoms { .. })
+        ));
+    }
+
+    #[test]
+    fn reject_invalid_decimal_amount() {
+        let amount = MintlayerAmount {
+            atoms: "0".into(),
+            decimal: "not-a-decimal".into(),
+        };
+
+        assert!(matches!(
+            amount.to_big_decimal(),
+            Err(MintlayerAmountConversionError::InvalidDecimal { .. })
+        ));
+    }
+
+    #[test]
+    fn reject_negative_amount() {
+        let amount = MintlayerAmount {
+            atoms: "-1".into(),
+            decimal: "-0.00000000001".into(),
+        };
+
+        assert_eq!(
+            amount.to_big_decimal(),
+            Err(MintlayerAmountConversionError::NegativeAmount { atoms: "-1".into() })
+        );
     }
 
     #[test]
