@@ -4,10 +4,13 @@ use crate::mintlayer::{
     MintlayerNetwork, MintlayerUtxo,
 };
 use crate::{DerivationMethodResponse, PrivKeyBuildPolicy};
+use common::executor::abortable_queue::AbortableQueue;
+use common::executor::AbortableSystem;
 use crypto::privkey::key_pair_from_secret;
 use crypto::Bip44Chain;
 use derive_more::Display;
 use keys::KeyPair;
+use mm2_core::mm_ctx::MmArc;
 use std::collections::HashSet;
 use std::fmt;
 use std::ops::Deref;
@@ -56,6 +59,8 @@ pub enum MintlayerCoinBuildError {
     UnsupportedPrivKeyPolicy {
         policy: &'static str,
     },
+    #[display(fmt = "Failed to create Mintlayer abortable subsystem: {}", _0)]
+    AbortableSystem(String),
 }
 
 #[derive(Debug, Display)]
@@ -98,6 +103,7 @@ pub struct MintlayerCoinImpl {
     key_pair: KeyPair,
     address: String,
     derivation_method: DerivationMethodResponse,
+    pub abortable_system: Arc<AbortableQueue>,
 }
 
 impl fmt::Debug for MintlayerCoinImpl {
@@ -121,6 +127,7 @@ impl fmt::Debug for MintlayerCoinImpl {
 
 impl MintlayerCoin {
     pub fn new(
+        ctx: &MmArc,
         conf: MintlayerCoinConf,
         request: MintlayerActivationRequest,
         priv_key_build_policy: PrivKeyBuildPolicy,
@@ -148,6 +155,10 @@ impl MintlayerCoin {
         }
 
         let (key_pair, address, derivation_method) = build_mintlayer_identity(conf.network, priv_key_build_policy)?;
+        let abortable_system = ctx
+            .abortable_system
+            .create_subsystem()
+            .map_err(|error| MintlayerCoinBuildError::AbortableSystem(error.to_string()))?;
 
         Ok(MintlayerCoin(Arc::new(MintlayerCoinImpl {
             conf,
@@ -158,6 +169,7 @@ impl MintlayerCoin {
             key_pair,
             address,
             derivation_method,
+            abortable_system: Arc::new(abortable_system),
         })))
     }
 
@@ -353,7 +365,7 @@ mod tests {
     use super::*;
     use crate::mintlayer::MintlayerApiClientConfig;
     use crypto::{CryptoCtx, KeyPairPolicy};
-    use mm2_core::mm_ctx::MmCtxBuilder;
+    use mm2_core::mm_ctx::{MmArc, MmCtxBuilder};
 
     const TEST_MNEMONIC: &str =
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
@@ -380,6 +392,10 @@ mod tests {
         PrivKeyBuildPolicy::IguanaPrivKey([1_u8; 32].into())
     }
 
+    fn test_ctx() -> MmArc {
+        MmCtxBuilder::default().into_mm_arc()
+    }
+
     #[test]
     fn build_valid_coin() {
         let request = request_with_urls(vec![
@@ -387,7 +403,7 @@ mod tests {
             concat!("http", "://127.0.0.1:3000").into(),
         ]);
 
-        let coin = MintlayerCoin::new(valid_conf(), request, iguana_policy()).unwrap();
+        let coin = MintlayerCoin::new(&test_ctx(), valid_conf(), request, iguana_policy()).unwrap();
 
         assert_eq!(coin.ticker(), "ML");
         assert_eq!(coin.network(), MintlayerNetwork::Mainnet);
@@ -409,7 +425,7 @@ mod tests {
     #[test]
     fn build_global_hd_identity_at_default_address_path() {
         let ctx = MmCtxBuilder::default().into_mm_arc();
-        let crypto_ctx = CryptoCtx::init_with_global_hd_account(ctx, TEST_MNEMONIC).unwrap();
+        let crypto_ctx = CryptoCtx::init_with_global_hd_account(ctx.clone(), TEST_MNEMONIC).unwrap();
         let global_hd_account = match crypto_ctx.key_pair_policy() {
             KeyPairPolicy::GlobalHDAccount(account) => account.clone(),
             KeyPairPolicy::Iguana => panic!("expected GlobalHDAccount policy"),
@@ -423,6 +439,7 @@ mod tests {
                 .unwrap();
 
         let coin = MintlayerCoin::new(
+            &ctx,
             valid_conf(),
             request_with_urls(vec![concat!("https", "://api.example").into()]),
             PrivKeyBuildPolicy::GlobalHDAccount(global_hd_account),
@@ -440,6 +457,7 @@ mod tests {
     #[test]
     fn debug_redacts_private_key() {
         let coin = MintlayerCoin::new(
+            &test_ctx(),
             valid_conf(),
             request_with_urls(vec![concat!("https", "://api.example").into()]),
             iguana_policy(),
@@ -455,6 +473,7 @@ mod tests {
     #[test]
     fn reject_trezor_private_key_policy() {
         let result = MintlayerCoin::new(
+            &test_ctx(),
             valid_conf(),
             request_with_urls(vec![concat!("https", "://api.example").into()]),
             PrivKeyBuildPolicy::Trezor,
@@ -471,7 +490,7 @@ mod tests {
         let mut request = request_with_urls(vec![concat!("https", "://api.example").into()]);
         request.required_confirmations = Some(5);
 
-        let coin = MintlayerCoin::new(valid_conf(), request, iguana_policy()).unwrap();
+        let coin = MintlayerCoin::new(&test_ctx(), valid_conf(), request, iguana_policy()).unwrap();
 
         assert_eq!(coin.required_confirmations(), 5);
     }
@@ -479,7 +498,7 @@ mod tests {
     #[test]
     fn reject_zero_confirmations_in_setter() {
         let request = request_with_urls(vec![concat!("https", "://api.example").into()]);
-        let coin = MintlayerCoin::new(valid_conf(), request, iguana_policy()).unwrap();
+        let coin = MintlayerCoin::new(&test_ctx(), valid_conf(), request, iguana_policy()).unwrap();
 
         let result = coin.set_required_confirmations(0);
 
@@ -529,6 +548,7 @@ mod tests {
         conf.genesis_block_id = "not-a-block-id".into();
 
         let result = MintlayerCoin::new(
+            &test_ctx(),
             conf,
             request_with_urls(vec![concat!("https", "://api.example").into()]),
             iguana_policy(),
@@ -540,6 +560,7 @@ mod tests {
     #[test]
     fn reject_remote_plain_http() {
         let result = MintlayerCoin::new(
+            &test_ctx(),
             valid_conf(),
             request_with_urls(vec![concat!("http", "://api.example").into()]),
             iguana_policy(),
@@ -554,6 +575,7 @@ mod tests {
     #[test]
     fn reject_url_credentials() {
         let result = MintlayerCoin::new(
+            &test_ctx(),
             valid_conf(),
             request_with_urls(vec![concat!("https", "://user:password@api.example").into()]),
             iguana_policy(),
@@ -568,6 +590,7 @@ mod tests {
     #[test]
     fn reject_duplicate_urls_after_normalization() {
         let result = MintlayerCoin::new(
+            &test_ctx(),
             valid_conf(),
             request_with_urls(vec![
                 concat!("https", "://api.example").into(),
