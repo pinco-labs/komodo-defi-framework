@@ -1,5 +1,6 @@
 use crate::coin_errors::{AddressFromPubkeyError, MyAddressError};
 use crate::hd_wallet::HDAddressSelector;
+use crate::mintlayer::address::validate_mintlayer_address;
 use crate::mintlayer::{
     mintlayer_address_from_compressed_public_key, mintlayer_derivation_path, MintlayerActivationRequest,
     MintlayerAddressInfo, MintlayerApiClient, MintlayerApiError, MintlayerChainTip, MintlayerCoinConf,
@@ -10,7 +11,19 @@ use crate::{
     PrivKeyBuildPolicy, SignatureError, SignatureResult, TransactionEnum, TransactionErr, TransactionResult,
     TxMarshalingErr, UnexpectedDerivationMethod, VerificationError, VerificationResult, WaitForHTLCTxSpendArgs,
 };
+use crate::{
+    CheckIfMyPaymentSentArgs, DexFee, FeeApproxStage, FoundSwapTxSpend, HistorySyncState, MmCoin,
+    NegotiateSwapContractAddrErr, RawTransactionError, RawTransactionFut, RawTransactionRequest, RefundPaymentArgs,
+    SearchForSwapTxSpendInput, SendPaymentArgs, SpendPaymentArgs, SwapOps, TradeFee, TradePreimageError,
+    TradePreimageFut, TradePreimageResult, TradePreimageValue, ValidateAddressResult, ValidateFeeArgs,
+    ValidateOtherPubKeyErr, ValidatePaymentError, ValidatePaymentInput, ValidatePaymentResult, WatcherOps, WeakSpawner,
+    WithdrawError, WithdrawFut, WithdrawRequest,
+};
 use async_trait::async_trait;
+use common::executor::AbortedError;
+use rpc::v1::types::Bytes as BytesJson;
+use serde_json::Value as Json;
+
 use common::executor::abortable_queue::AbortableQueue;
 use common::executor::AbortableSystem;
 use crypto::privkey::key_pair_from_secret;
@@ -383,6 +396,261 @@ impl MarketCoinOps for MintlayerCoin {
     }
 }
 
+const MINTLAYER_WALLET_ONLY_REASON: &str = "Mintlayer is currently wallet-only; swap transactions are not implemented";
+
+#[async_trait]
+impl SwapOps for MintlayerCoin {
+    async fn send_taker_fee(&self, _dex_fee: DexFee, _uuid: &[u8], _expire_at: u64) -> TransactionResult {
+        Err(TransactionErr::ProtocolNotSupported(
+            MINTLAYER_WALLET_ONLY_REASON.into(),
+        ))
+    }
+
+    async fn send_maker_payment(&self, _args: SendPaymentArgs<'_>) -> TransactionResult {
+        Err(TransactionErr::ProtocolNotSupported(
+            MINTLAYER_WALLET_ONLY_REASON.into(),
+        ))
+    }
+
+    async fn send_taker_payment(&self, _args: SendPaymentArgs<'_>) -> TransactionResult {
+        Err(TransactionErr::ProtocolNotSupported(
+            MINTLAYER_WALLET_ONLY_REASON.into(),
+        ))
+    }
+
+    async fn send_maker_spends_taker_payment(&self, _args: SpendPaymentArgs<'_>) -> TransactionResult {
+        Err(TransactionErr::ProtocolNotSupported(
+            MINTLAYER_WALLET_ONLY_REASON.into(),
+        ))
+    }
+
+    async fn send_taker_spends_maker_payment(&self, _args: SpendPaymentArgs<'_>) -> TransactionResult {
+        Err(TransactionErr::ProtocolNotSupported(
+            MINTLAYER_WALLET_ONLY_REASON.into(),
+        ))
+    }
+
+    async fn send_taker_refunds_payment(&self, _args: RefundPaymentArgs<'_>) -> TransactionResult {
+        Err(TransactionErr::ProtocolNotSupported(
+            MINTLAYER_WALLET_ONLY_REASON.into(),
+        ))
+    }
+
+    async fn send_maker_refunds_payment(&self, _args: RefundPaymentArgs<'_>) -> TransactionResult {
+        Err(TransactionErr::ProtocolNotSupported(
+            MINTLAYER_WALLET_ONLY_REASON.into(),
+        ))
+    }
+
+    async fn validate_fee(&self, _args: ValidateFeeArgs<'_>) -> ValidatePaymentResult<()> {
+        MmError::err(ValidatePaymentError::ProtocolNotSupported(
+            MINTLAYER_WALLET_ONLY_REASON.into(),
+        ))
+    }
+
+    async fn validate_maker_payment(&self, _input: ValidatePaymentInput) -> ValidatePaymentResult<()> {
+        MmError::err(ValidatePaymentError::ProtocolNotSupported(
+            MINTLAYER_WALLET_ONLY_REASON.into(),
+        ))
+    }
+
+    async fn validate_taker_payment(&self, _input: ValidatePaymentInput) -> ValidatePaymentResult<()> {
+        MmError::err(ValidatePaymentError::ProtocolNotSupported(
+            MINTLAYER_WALLET_ONLY_REASON.into(),
+        ))
+    }
+
+    async fn check_if_my_payment_sent(
+        &self,
+        _args: CheckIfMyPaymentSentArgs<'_>,
+    ) -> Result<Option<TransactionEnum>, String> {
+        Err(MINTLAYER_WALLET_ONLY_REASON.into())
+    }
+
+    async fn search_for_swap_tx_spend_my(
+        &self,
+        _input: SearchForSwapTxSpendInput<'_>,
+    ) -> Result<Option<FoundSwapTxSpend>, String> {
+        Err(MINTLAYER_WALLET_ONLY_REASON.into())
+    }
+
+    async fn search_for_swap_tx_spend_other(
+        &self,
+        _input: SearchForSwapTxSpendInput<'_>,
+    ) -> Result<Option<FoundSwapTxSpend>, String> {
+        Err(MINTLAYER_WALLET_ONLY_REASON.into())
+    }
+
+    async fn extract_secret(&self, _secret_hash: &[u8], _spend_tx: &[u8]) -> Result<[u8; 32], String> {
+        Err(MINTLAYER_WALLET_ONLY_REASON.into())
+    }
+
+    fn negotiate_swap_contract_addr(
+        &self,
+        _other_side_address: Option<&[u8]>,
+    ) -> Result<Option<BytesJson>, MmError<NegotiateSwapContractAddrErr>> {
+        Ok(None)
+    }
+
+    fn derive_htlc_key_pair(&self, _swap_unique_data: &[u8]) -> KeyPair {
+        self.key_pair.clone()
+    }
+
+    fn derive_htlc_pubkey(&self, _swap_unique_data: &[u8]) -> [u8; 33] {
+        let mut public_key = [0_u8; 33];
+        public_key.copy_from_slice(self.public_key());
+        public_key
+    }
+
+    fn validate_other_pubkey(&self, raw_pubkey: &[u8]) -> MmResult<(), ValidateOtherPubKeyErr> {
+        secp256k1::PublicKey::from_slice(raw_pubkey)
+            .map(|_| ())
+            .map_err(|error| ValidateOtherPubKeyErr::InvalidPubKey(error.to_string()).into())
+    }
+}
+
+impl WatcherOps for MintlayerCoin {}
+
+#[async_trait]
+impl MmCoin for MintlayerCoin {
+    fn wallet_only(&self, _ctx: &MmArc) -> bool {
+        true
+    }
+
+    fn spawner(&self) -> WeakSpawner {
+        self.abortable_system.weak_spawner()
+    }
+
+    fn withdraw(&self, _req: WithdrawRequest) -> WithdrawFut {
+        Box::new(futures01::future::err(MmError::new(WithdrawError::UnsupportedError(
+            MINTLAYER_WALLET_ONLY_REASON.into(),
+        ))))
+    }
+
+    fn get_raw_transaction(&self, _req: RawTransactionRequest) -> RawTransactionFut<'_> {
+        Box::new(futures01::future::err(MmError::new(
+            RawTransactionError::NotImplemented {
+                coin: self.ticker().to_string(),
+            },
+        )))
+    }
+
+    fn get_tx_hex_by_hash(&self, _tx_hash: Vec<u8>) -> RawTransactionFut<'_> {
+        Box::new(futures01::future::err(MmError::new(
+            RawTransactionError::NotImplemented {
+                coin: self.ticker().to_string(),
+            },
+        )))
+    }
+
+    fn decimals(&self) -> u8 {
+        self.decimals()
+    }
+
+    fn convert_to_address(&self, _from: &str, _to_address_format: Json) -> Result<String, String> {
+        Err("Mintlayer address conversion is not implemented".into())
+    }
+
+    fn validate_address(&self, address: &str) -> ValidateAddressResult {
+        match validate_mintlayer_address(self.network(), address) {
+            Ok(()) => ValidateAddressResult {
+                is_valid: true,
+                reason: None,
+            },
+            Err(error) => ValidateAddressResult {
+                is_valid: false,
+                reason: Some(error.to_string()),
+            },
+        }
+    }
+
+    fn process_history_loop(&self, _ctx: MmArc) -> Box<dyn Future<Item = (), Error = ()> + Send> {
+        Box::new(futures01::future::ok(()))
+    }
+
+    fn history_sync_status(&self) -> HistorySyncState {
+        HistorySyncState::NotEnabled
+    }
+
+    fn get_trade_fee(&self) -> Box<dyn Future<Item = TradeFee, Error = String> + Send> {
+        Box::new(futures01::future::err(MINTLAYER_WALLET_ONLY_REASON.into()))
+    }
+
+    async fn get_sender_trade_fee(
+        &self,
+        _value: TradePreimageValue,
+        _stage: FeeApproxStage,
+    ) -> TradePreimageResult<TradeFee> {
+        MmError::err(TradePreimageError::ProtocolNotSupported(
+            MINTLAYER_WALLET_ONLY_REASON.into(),
+        ))
+    }
+
+    fn get_receiver_trade_fee(&self, _stage: FeeApproxStage) -> TradePreimageFut<TradeFee> {
+        Box::new(futures01::future::err(MmError::new(
+            TradePreimageError::ProtocolNotSupported(MINTLAYER_WALLET_ONLY_REASON.into()),
+        )))
+    }
+
+    async fn get_fee_to_send_taker_fee(
+        &self,
+        _dex_fee_amount: DexFee,
+        _stage: FeeApproxStage,
+    ) -> TradePreimageResult<TradeFee> {
+        MmError::err(TradePreimageError::ProtocolNotSupported(
+            MINTLAYER_WALLET_ONLY_REASON.into(),
+        ))
+    }
+
+    fn required_confirmations(&self) -> u64 {
+        self.required_confirmations()
+    }
+
+    fn requires_notarization(&self) -> bool {
+        false
+    }
+
+    fn set_required_confirmations(&self, confirmations: u64) {
+        if confirmations > 0 {
+            self.required_confirmations.store(confirmations, Ordering::Relaxed);
+        }
+    }
+
+    fn set_requires_notarization(&self, _requires_nota: bool) {}
+
+    fn swap_contract_address(&self) -> Option<BytesJson> {
+        None
+    }
+
+    fn fallback_swap_contract(&self) -> Option<BytesJson> {
+        None
+    }
+
+    fn mature_confirmations(&self) -> Option<u32> {
+        None
+    }
+
+    fn coin_protocol_info(&self, _amount_to_receive: Option<MmNumber>) -> Vec<u8> {
+        Vec::new()
+    }
+
+    fn is_coin_protocol_supported(
+        &self,
+        _info: &Option<Vec<u8>>,
+        _amount_to_send: Option<MmNumber>,
+        _locktime: u64,
+        _is_maker: bool,
+    ) -> bool {
+        false
+    }
+
+    fn on_disabled(&self) -> Result<(), AbortedError> {
+        self.abortable_system.abort_all()
+    }
+
+    fn on_token_deactivated(&self, _ticker: &str) {}
+}
+
 fn coin_balance_from_address_info(address_info: MintlayerAddressInfo) -> Result<CoinBalance, BalanceError> {
     let spendable = address_info
         .coin_balance
@@ -587,6 +855,58 @@ mod tests {
             coin_balance_from_address_info(address_info),
             Err(BalanceError::InvalidResponse(_))
         ));
+    }
+
+    #[test]
+    fn mmcoin_is_always_wallet_only() {
+        let ctx = test_ctx();
+        let coin = MintlayerCoin::new(
+            &ctx,
+            valid_conf(),
+            request_with_urls(vec![concat!("https", "://api.example").into()]),
+            iguana_policy(),
+        )
+        .unwrap();
+
+        assert!(MmCoin::wallet_only(&coin, &ctx));
+        assert!(!MmCoin::is_coin_protocol_supported(&coin, &None, None, 0, false));
+    }
+
+    #[test]
+    fn mmcoin_validates_local_address() {
+        let ctx = test_ctx();
+        let coin = MintlayerCoin::new(
+            &ctx,
+            valid_conf(),
+            request_with_urls(vec![concat!("https", "://api.example").into()]),
+            iguana_policy(),
+        )
+        .unwrap();
+
+        let valid = MmCoin::validate_address(&coin, coin.address());
+        assert!(valid.is_valid);
+        assert!(valid.reason.is_none());
+
+        let invalid = MmCoin::validate_address(&coin, "not-a-mintlayer-address");
+        assert!(!invalid.is_valid);
+        assert!(invalid.reason.is_some());
+    }
+
+    #[test]
+    fn htlc_public_key_matches_local_identity() {
+        let ctx = test_ctx();
+        let coin = MintlayerCoin::new(
+            &ctx,
+            valid_conf(),
+            request_with_urls(vec![concat!("https", "://api.example").into()]),
+            iguana_policy(),
+        )
+        .unwrap();
+
+        let htlc_public_key = SwapOps::derive_htlc_pubkey(&coin, b"test-swap");
+        assert_eq!(htlc_public_key.as_slice(), coin.public_key());
+        assert!(SwapOps::validate_other_pubkey(&coin, &htlc_public_key).is_ok());
+        assert!(SwapOps::validate_other_pubkey(&coin, &[0_u8; 32]).is_err());
     }
 
     #[test]
