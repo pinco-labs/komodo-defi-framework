@@ -1,16 +1,28 @@
+use crate::coin_errors::{AddressFromPubkeyError, MyAddressError};
+use crate::hd_wallet::HDAddressSelector;
 use crate::mintlayer::{
     mintlayer_address_from_compressed_public_key, mintlayer_derivation_path, MintlayerActivationRequest,
     MintlayerAddressInfo, MintlayerApiClient, MintlayerApiError, MintlayerChainTip, MintlayerCoinConf,
     MintlayerNetwork, MintlayerUtxo,
 };
-use crate::{BalanceError, CoinBalance, DerivationMethodResponse, PrivKeyBuildPolicy};
+use crate::{
+    BalanceError, BalanceFut, CoinBalance, ConfirmPaymentInput, DerivationMethodResponse, MarketCoinOps,
+    PrivKeyBuildPolicy, SignatureError, SignatureResult, TransactionEnum, TransactionErr, TransactionResult,
+    TxMarshalingErr, UnexpectedDerivationMethod, VerificationError, VerificationResult, WaitForHTLCTxSpendArgs,
+};
+use async_trait::async_trait;
 use common::executor::abortable_queue::AbortableQueue;
 use common::executor::AbortableSystem;
 use crypto::privkey::key_pair_from_secret;
 use crypto::Bip44Chain;
 use derive_more::Display;
+use futures::{FutureExt, TryFutureExt};
+use futures01::Future;
 use keys::KeyPair;
 use mm2_core::mm_ctx::MmArc;
+use mm2_err_handle::prelude::*;
+use mm2_number::{BigDecimal, BigInt, MmNumber};
+use rpc::v1::types::H264 as H264Json;
 use std::collections::HashSet;
 use std::fmt;
 use std::ops::Deref;
@@ -252,6 +264,122 @@ impl MintlayerCoin {
 
         self.required_confirmations.store(confirmations, Ordering::Relaxed);
         Ok(())
+    }
+}
+
+#[async_trait]
+impl MarketCoinOps for MintlayerCoin {
+    fn ticker(&self) -> &str {
+        &self.conf.ticker
+    }
+
+    fn my_address(&self) -> MmResult<String, MyAddressError> {
+        Ok(self.address.clone())
+    }
+
+    fn address_from_pubkey(&self, pubkey: &H264Json) -> MmResult<String, AddressFromPubkeyError> {
+        mintlayer_address_from_compressed_public_key(self.network(), &pubkey.0)
+            .map_err(|error| AddressFromPubkeyError::InternalError(error.to_string()).into())
+    }
+
+    async fn get_public_key(&self) -> Result<String, MmError<UnexpectedDerivationMethod>> {
+        Ok(hex::encode(self.public_key()))
+    }
+
+    fn sign_message_hash(&self, _message: &str) -> Option<[u8; 32]> {
+        None
+    }
+
+    fn sign_message(&self, _message: &str, _address: Option<HDAddressSelector>) -> SignatureResult<String> {
+        MmError::err(SignatureError::InternalError(
+            "Mintlayer message signing is not implemented".to_string(),
+        ))
+    }
+
+    fn verify_message(&self, _signature: &str, _message: &str, _address: &str) -> VerificationResult<bool> {
+        MmError::err(VerificationError::InternalError(
+            "Mintlayer message verification is not implemented".to_string(),
+        ))
+    }
+
+    fn my_balance(&self) -> BalanceFut<CoinBalance> {
+        let coin = self.clone();
+        let future = async move {
+            match coin.balance().await {
+                Ok(balance) => Ok(balance),
+                Err(error) => MmError::err(error),
+            }
+        };
+        Box::new(future.boxed().compat())
+    }
+
+    fn platform_coin_balance(&self) -> BalanceFut<BigDecimal> {
+        Box::new(self.my_balance().map(|balance| balance.spendable))
+    }
+
+    fn platform_ticker(&self) -> &str {
+        self.ticker()
+    }
+
+    fn send_raw_tx(&self, _tx: &str) -> Box<dyn Future<Item = String, Error = String> + Send> {
+        Box::new(futures01::future::err(
+            "Mintlayer raw transaction broadcast is not implemented".to_string(),
+        ))
+    }
+
+    fn send_raw_tx_bytes(&self, _tx: &[u8]) -> Box<dyn Future<Item = String, Error = String> + Send> {
+        Box::new(futures01::future::err(
+            "Mintlayer raw transaction broadcast is not implemented".to_string(),
+        ))
+    }
+
+    fn wait_for_confirmations(&self, _input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send> {
+        Box::new(futures01::future::err(
+            "Mintlayer confirmation tracking is not implemented".to_string(),
+        ))
+    }
+
+    async fn wait_for_htlc_tx_spend(&self, _args: WaitForHTLCTxSpendArgs<'_>) -> TransactionResult {
+        Err(TransactionErr::ProtocolNotSupported(
+            "Mintlayer HTLC transaction tracking is not implemented".to_string(),
+        ))
+    }
+
+    fn tx_enum_from_bytes(&self, _bytes: &[u8]) -> Result<TransactionEnum, MmError<TxMarshalingErr>> {
+        MmError::err(TxMarshalingErr::NotSupported(
+            "Mintlayer transaction decoding is not implemented".to_string(),
+        ))
+    }
+
+    fn current_block(&self) -> Box<dyn Future<Item = u64, Error = String> + Send> {
+        let coin = self.clone();
+        let future = async move {
+            coin.chain_tip()
+                .await
+                .map(|tip| tip.block_height)
+                .map_err(|error| error.to_string())
+        };
+        Box::new(future.boxed().compat())
+    }
+
+    fn display_priv_key(&self) -> Result<String, String> {
+        Err("Mintlayer private-key export is disabled".to_string())
+    }
+
+    fn min_tx_amount(&self) -> BigDecimal {
+        BigDecimal::new(BigInt::from(1), i64::from(MINTLAYER_DECIMALS))
+    }
+
+    fn min_trading_vol(&self) -> MmNumber {
+        self.min_tx_amount().into()
+    }
+
+    fn should_burn_dex_fee(&self) -> bool {
+        false
+    }
+
+    fn is_trezor(&self) -> bool {
+        false
     }
 }
 
