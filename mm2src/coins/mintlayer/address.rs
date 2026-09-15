@@ -1,6 +1,6 @@
 use crate::mintlayer::MintlayerNetwork;
 use crate::ToBytes;
-use bech32::{ToBase32, Variant};
+use bech32::{FromBase32, ToBase32, Variant};
 use crypto::privkey::key_pair_from_secret;
 use crypto::{Bip44Chain, DerivationPath, GlobalHDAccountArc};
 use std::str::FromStr;
@@ -27,6 +27,16 @@ pub enum MintlayerAddressError {
     InvalidCompressedPublicKey(String),
     #[error("Failed to encode Mintlayer address: {0}")]
     AddressEncoding(String),
+    #[error("Failed to decode Mintlayer address: {0}")]
+    AddressDecoding(String),
+    #[error("Unexpected Mintlayer address prefix: expected '{expected}', found '{actual}'")]
+    UnexpectedHrp { expected: String, actual: String },
+    #[error("Mintlayer address must use Bech32m encoding")]
+    UnexpectedVariant,
+    #[error("Invalid Mintlayer destination payload length: expected {expected} bytes, found {actual}")]
+    InvalidDestinationPayloadLength { expected: usize, actual: usize },
+    #[error("Unsupported Mintlayer destination tag: {0}")]
+    UnsupportedDestinationTag(u8),
 }
 
 /// Returns the BIP44 coin type used by Mintlayer Core.
@@ -126,6 +136,40 @@ pub fn mintlayer_address_from_compressed_public_key(
     .map_err(|error| MintlayerAddressError::AddressEncoding(error.to_string()))
 }
 
+/// Validates a Mintlayer PublicKeyHash address for the selected network.
+pub fn validate_mintlayer_address(network: MintlayerNetwork, address: &str) -> Result<(), MintlayerAddressError> {
+    let (hrp, data, variant) =
+        bech32::decode(address).map_err(|error| MintlayerAddressError::AddressDecoding(error.to_string()))?;
+
+    let expected_hrp = mintlayer_public_key_hash_hrp(network);
+    if !hrp.eq_ignore_ascii_case(expected_hrp) {
+        return Err(MintlayerAddressError::UnexpectedHrp {
+            expected: expected_hrp.to_string(),
+            actual: hrp,
+        });
+    }
+
+    if variant != Variant::Bech32m {
+        return Err(MintlayerAddressError::UnexpectedVariant);
+    }
+
+    let payload =
+        Vec::<u8>::from_base32(&data).map_err(|error| MintlayerAddressError::AddressDecoding(error.to_string()))?;
+    let expected_payload_length = 1 + PUBLIC_KEY_HASH_SIZE;
+    if payload.len() != expected_payload_length {
+        return Err(MintlayerAddressError::InvalidDestinationPayloadLength {
+            expected: expected_payload_length,
+            actual: payload.len(),
+        });
+    }
+
+    if payload[0] != DESTINATION_PUBLIC_KEY_HASH_TAG {
+        return Err(MintlayerAddressError::UnsupportedDestinationTag(payload[0]));
+    }
+
+    Ok(())
+}
+
 /// Derives a Mintlayer key from the global KDF HD context and returns its
 /// PublicKeyHash address.
 pub fn derive_mintlayer_address(
@@ -194,6 +238,71 @@ mod tests {
         let address = mintlayer_address_from_compressed_public_key(MintlayerNetwork::Mainnet, &public_key).unwrap();
 
         assert_eq!(address, OFFICIAL_MAINNET_ADDRESS);
+    }
+
+    #[test]
+    fn validates_official_mainnet_address() {
+        assert!(validate_mintlayer_address(MintlayerNetwork::Mainnet, OFFICIAL_MAINNET_ADDRESS).is_ok());
+    }
+
+    #[test]
+    fn rejects_address_from_another_network() {
+        assert!(matches!(
+            validate_mintlayer_address(MintlayerNetwork::Testnet, OFFICIAL_MAINNET_ADDRESS),
+            Err(MintlayerAddressError::UnexpectedHrp { .. })
+        ));
+    }
+
+    #[test]
+    fn rejects_legacy_bech32_variant() {
+        let (_, data, _) = bech32::decode(OFFICIAL_MAINNET_ADDRESS).unwrap();
+        let address = bech32::encode(
+            mintlayer_public_key_hash_hrp(MintlayerNetwork::Mainnet),
+            data,
+            Variant::Bech32,
+        )
+        .unwrap();
+
+        assert_eq!(
+            validate_mintlayer_address(MintlayerNetwork::Mainnet, &address),
+            Err(MintlayerAddressError::UnexpectedVariant)
+        );
+    }
+
+    #[test]
+    fn rejects_unsupported_destination_tag() {
+        let mut payload = vec![0_u8; 1 + PUBLIC_KEY_HASH_SIZE];
+        payload[0] = 2;
+        let address = bech32::encode(
+            mintlayer_public_key_hash_hrp(MintlayerNetwork::Mainnet),
+            payload.to_base32(),
+            Variant::Bech32m,
+        )
+        .unwrap();
+
+        assert_eq!(
+            validate_mintlayer_address(MintlayerNetwork::Mainnet, &address),
+            Err(MintlayerAddressError::UnsupportedDestinationTag(2))
+        );
+    }
+
+    #[test]
+    fn rejects_incorrect_destination_payload_length() {
+        let payload = vec![DESTINATION_PUBLIC_KEY_HASH_TAG; PUBLIC_KEY_HASH_SIZE];
+        let address = bech32::encode(
+            mintlayer_public_key_hash_hrp(MintlayerNetwork::Mainnet),
+            payload.to_base32(),
+            Variant::Bech32m,
+        )
+        .unwrap();
+
+        assert_eq!(
+            validate_mintlayer_address(MintlayerNetwork::Mainnet, &address),
+            Err(MintlayerAddressError::InvalidDestinationPayloadLength {
+                expected: 1 + PUBLIC_KEY_HASH_SIZE,
+                actual: PUBLIC_KEY_HASH_SIZE,
+            })
+        );
     }
 
     #[test]
