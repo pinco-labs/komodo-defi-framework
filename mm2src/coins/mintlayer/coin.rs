@@ -3,7 +3,7 @@ use crate::mintlayer::{
     MintlayerAddressInfo, MintlayerApiClient, MintlayerApiError, MintlayerChainTip, MintlayerCoinConf,
     MintlayerNetwork, MintlayerUtxo,
 };
-use crate::{DerivationMethodResponse, PrivKeyBuildPolicy};
+use crate::{BalanceError, CoinBalance, DerivationMethodResponse, PrivKeyBuildPolicy};
 use common::executor::abortable_queue::AbortableQueue;
 use common::executor::AbortableSystem;
 use crypto::privkey::key_pair_from_secret;
@@ -223,6 +223,16 @@ impl MintlayerCoin {
         self.api_client.address_info(address).await
     }
 
+    /// Returns the native coin balance of the locally derived Mintlayer address.
+    pub async fn balance(&self) -> Result<CoinBalance, BalanceError> {
+        let address_info = self
+            .address_info(self.address())
+            .await
+            .map_err(|error| BalanceError::Transport(error.to_string()))?;
+
+        coin_balance_from_address_info(address_info)
+    }
+
     pub async fn spendable_utxos(&self, address: &str) -> Result<Vec<MintlayerUtxo>, MintlayerApiError> {
         self.api_client.spendable_utxos(address).await
     }
@@ -243,6 +253,19 @@ impl MintlayerCoin {
         self.required_confirmations.store(confirmations, Ordering::Relaxed);
         Ok(())
     }
+}
+
+fn coin_balance_from_address_info(address_info: MintlayerAddressInfo) -> Result<CoinBalance, BalanceError> {
+    let spendable = address_info
+        .coin_balance
+        .to_big_decimal()
+        .map_err(|error| BalanceError::InvalidResponse(error.to_string()))?;
+    let unspendable = address_info
+        .locked_coin_balance
+        .to_big_decimal()
+        .map_err(|error| BalanceError::InvalidResponse(error.to_string()))?;
+
+    Ok(CoinBalance { spendable, unspendable })
 }
 
 fn build_mintlayer_identity(
@@ -394,6 +417,48 @@ mod tests {
 
     fn test_ctx() -> MmArc {
         MmCtxBuilder::default().into_mm_arc()
+    }
+
+    #[test]
+    fn convert_address_info_to_coin_balance() {
+        let address_info = MintlayerAddressInfo {
+            coin_balance: crate::mintlayer::MintlayerAmount {
+                atoms: "1250000000000".into(),
+                decimal: "12.5".into(),
+            },
+            locked_coin_balance: crate::mintlayer::MintlayerAmount {
+                atoms: "250000000000".into(),
+                decimal: "2.5".into(),
+            },
+            transaction_history: Vec::new(),
+            tokens: Vec::new(),
+        };
+
+        let balance = coin_balance_from_address_info(address_info).unwrap();
+
+        assert_eq!(balance.spendable, "12.5".parse().unwrap());
+        assert_eq!(balance.unspendable, "2.5".parse().unwrap());
+    }
+
+    #[test]
+    fn reject_inconsistent_address_info_balance() {
+        let address_info = MintlayerAddressInfo {
+            coin_balance: crate::mintlayer::MintlayerAmount {
+                atoms: "1250000000000".into(),
+                decimal: "12.6".into(),
+            },
+            locked_coin_balance: crate::mintlayer::MintlayerAmount {
+                atoms: "0".into(),
+                decimal: "0".into(),
+            },
+            transaction_history: Vec::new(),
+            tokens: Vec::new(),
+        };
+
+        assert!(matches!(
+            coin_balance_from_address_info(address_info),
+            Err(BalanceError::InvalidResponse(_))
+        ));
     }
 
     #[test]
