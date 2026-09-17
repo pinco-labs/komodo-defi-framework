@@ -5319,7 +5319,14 @@ pub async fn lp_coininit(ctx: &MmArc, ticker: &str, req: &Json) -> Result<MmCoin
             let params = try_s!(SiaCoinActivationRequest::from_legacy_req(req));
             try_s!(SiaCoin::new(ctx, coins_en, &params, priv_key_policy).await).into()
         },
-        CoinProtocol::MINTLAYER => return ERR!("MINTLAYER protocol is not supported by legacy lp_coininit"),
+        CoinProtocol::MINTLAYER => {
+            let conf: mintlayer::MintlayerCoinConf = try_s!(json::from_value(coins_en.clone()));
+            let request: mintlayer::MintlayerActivationRequest = try_s!(json::from_value(req.clone()));
+            let coin = try_s!(mintlayer::MintlayerCoin::new(ctx, conf, request, priv_key_policy));
+
+            try_s!(coin.validate_network().await);
+            coin.into()
+        },
         CoinProtocol::SOLANA(_) => return ERR!("SOLANA is not supported by lp_coininit"),
         CoinProtocol::SOLANATOKEN(_) => return ERR!("SOLANATOKEN is not supported by lp_coininit"),
     };
