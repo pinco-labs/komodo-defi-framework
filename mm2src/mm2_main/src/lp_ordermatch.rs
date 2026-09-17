@@ -6728,6 +6728,7 @@ fn orderbook_address(
         CoinProtocol::LIGHTNING { .. } => Ok(OrderbookAddress::Shielded),
         // TODO implement for SIA "this is needed to show the address in the orderbook", we leave is as shielded for now
         CoinProtocol::SIA => Ok(OrderbookAddress::Shielded),
+        CoinProtocol::MINTLAYER => MmError::err(OrderbookAddrErr::CoinIsNotSupported(coin.to_owned())),
         CoinProtocol::SOLANA(_) => MmError::err(OrderbookAddrErr::CoinIsNotSupported(coin.to_owned())),
         CoinProtocol::SOLANATOKEN(_) => MmError::err(OrderbookAddrErr::CoinIsNotSupported(coin.to_owned())),
     }
