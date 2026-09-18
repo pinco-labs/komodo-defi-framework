@@ -1,4 +1,4 @@
-use crate::mintlayer::{MintlayerAddressInfo, MintlayerChainTip, MintlayerGenesisInfo, MintlayerUtxo};
+use crate::mintlayer::{MintlayerAddressInfo, MintlayerAmount, MintlayerChainTip, MintlayerGenesisInfo, MintlayerUtxo};
 use async_std::prelude::FutureExt;
 use async_trait::async_trait;
 use compatible_time::Duration;
@@ -115,7 +115,10 @@ where
 
     pub async fn address_info(&self, address: &str) -> Result<MintlayerAddressInfo, MintlayerApiError> {
         validate_path_segment(address)?;
-        self.get_json(&["address", address]).await
+        match self.get_json(&["address", address]).await {
+            Err(error) if is_address_not_found(&error) => Ok(empty_address_info()),
+            result => result,
+        }
     }
 
     pub async fn spendable_utxos(&self, address: &str) -> Result<Vec<MintlayerUtxo>, MintlayerApiError> {
@@ -178,6 +181,45 @@ where
         }
 
         Err(MintlayerApiError::AllEndpointsFailed { failures })
+    }
+}
+
+fn is_address_not_found(error: &MintlayerApiError) -> bool {
+    let MintlayerApiError::AllEndpointsFailed { failures } = error else {
+        return false;
+    };
+
+    !failures.is_empty()
+        && failures.iter().all(|failure| {
+            let MintlayerEndpointError::HttpStatus { status, body } = &failure.error else {
+                return false;
+            };
+
+            *status == StatusCode::NOT_FOUND.as_u16()
+                && serde_json::from_str::<serde_json::Value>(body)
+                    .ok()
+                    .and_then(|value| {
+                        value
+                            .get("error")
+                            .and_then(serde_json::Value::as_str)
+                            .map(str::to_owned)
+                    })
+                    .as_deref()
+                    == Some("Address not found")
+        })
+}
+
+fn empty_address_info() -> MintlayerAddressInfo {
+    let zero = MintlayerAmount {
+        atoms: "0".into(),
+        decimal: "0".into(),
+    };
+
+    MintlayerAddressInfo {
+        coin_balance: zero.clone(),
+        locked_coin_balance: zero,
+        transaction_history: Vec::new(),
+        tokens: Vec::new(),
     }
 }
 
@@ -406,6 +448,57 @@ mod tests {
             transport.requested_urls(),
             vec!["https://api.example/mintlayer/api/v2/chain/tip"]
         );
+    }
+
+    #[test]
+    fn address_not_found_returns_empty_address_info() {
+        let (client, transport) = client_with_responses(
+            vec![api_url("api-1.example")],
+            vec![Ok((
+                StatusCode::NOT_FOUND,
+                br#"{"error":"Address not found"}"#.to_vec(),
+            ))],
+        );
+
+        let info = block_on(client.address_info("mtc1qnew")).unwrap();
+
+        assert_eq!(info.coin_balance.atoms, "0");
+        assert_eq!(info.coin_balance.decimal, "0");
+        assert_eq!(info.locked_coin_balance.atoms, "0");
+        assert_eq!(info.locked_coin_balance.decimal, "0");
+        assert!(info.transaction_history.is_empty());
+        assert!(info.tokens.is_empty());
+        assert_eq!(
+            transport.requested_urls(),
+            vec!["https://api-1.example/api/v2/address/mtc1qnew"]
+        );
+    }
+
+    #[test]
+    fn unrelated_address_404_remains_an_error() {
+        let (client, _transport) = client_with_responses(
+            vec![api_url("api-1.example")],
+            vec![Ok((StatusCode::NOT_FOUND, br#"{"error":"Route not found"}"#.to_vec()))],
+        );
+
+        let error = block_on(client.address_info("mtc1qnew")).unwrap_err();
+
+        assert!(matches!(error, MintlayerApiError::AllEndpointsFailed { .. }));
+    }
+
+    #[test]
+    fn mixed_address_not_found_and_transport_failure_remains_an_error() {
+        let (client, _transport) = client_with_responses(
+            vec![api_url("api-1.example"), api_url("api-2.example")],
+            vec![
+                Ok((StatusCode::NOT_FOUND, br#"{"error":"Address not found"}"#.to_vec())),
+                Err("second endpoint down".into()),
+            ],
+        );
+
+        let error = block_on(client.address_info("mtc1qnew")).unwrap_err();
+
+        assert!(matches!(error, MintlayerApiError::AllEndpointsFailed { .. }));
     }
 
     #[test]
