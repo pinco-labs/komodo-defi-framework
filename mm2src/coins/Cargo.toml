@@ -28,6 +28,7 @@ path = "lp_coins.rs"
 doctest = false
 
 [dependencies]
+mintlayer-sdk = { git = "https://github.com/mintlayer/rust-sdk.git", rev = "d462098043d6962a76b405f86cf5ab19a6f104a4", default-features = false, features = ["crypto"] }
 async-std = { workspace = true, features = ["unstable"] }
 async-trait.workspace = true
 base64.workspace = true
