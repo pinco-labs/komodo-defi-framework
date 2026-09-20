@@ -1,4 +1,6 @@
-use crate::mintlayer::{MintlayerAddressInfo, MintlayerAmount, MintlayerChainTip, MintlayerGenesisInfo, MintlayerUtxo};
+use crate::mintlayer::{
+    MintlayerAddressInfo, MintlayerAmount, MintlayerChainTip, MintlayerFeeRate, MintlayerGenesisInfo, MintlayerUtxo,
+};
 use async_std::prelude::FutureExt;
 use async_trait::async_trait;
 use compatible_time::Duration;
@@ -111,6 +113,10 @@ where
 
     pub async fn chain_tip(&self) -> Result<MintlayerChainTip, MintlayerApiError> {
         self.get_json(&["chain", "tip"]).await
+    }
+
+    pub async fn fee_rate(&self) -> Result<MintlayerFeeRate, MintlayerApiError> {
+        self.get_json(&["feerate"]).await
     }
 
     pub async fn address_info(&self, address: &str) -> Result<MintlayerAddressInfo, MintlayerApiError> {
@@ -363,6 +369,40 @@ mod tests {
         assert_eq!(
             transport.requested_urls(),
             vec!["https://api-1.example/api/v2/chain/tip"]
+        );
+    }
+
+    #[test]
+    fn request_fee_rate() {
+        let response = br#""100000000000""#.to_vec();
+        let (client, transport) =
+            client_with_responses(vec![api_url("api.example")], vec![Ok((StatusCode::OK, response))]);
+
+        let fee_rate = block_on(client.fee_rate()).unwrap();
+
+        assert_eq!(fee_rate.atoms_per_kb(), 100_000_000_000);
+        assert_eq!(transport.requested_urls(), vec!["https://api.example/api/v2/feerate"]);
+    }
+
+    #[test]
+    fn fee_rate_fails_over_after_invalid_schema() {
+        let (client, transport) = client_with_responses(
+            vec![api_url("api-1.example"), api_url("api-2.example")],
+            vec![
+                Ok((StatusCode::OK, b"100000000000".to_vec())),
+                Ok((StatusCode::OK, br#""100000000000""#.to_vec())),
+            ],
+        );
+
+        let fee_rate = block_on(client.fee_rate()).unwrap();
+
+        assert_eq!(fee_rate.atoms_per_kb(), 100_000_000_000);
+        assert_eq!(
+            transport.requested_urls(),
+            vec![
+                "https://api-1.example/api/v2/feerate",
+                "https://api-2.example/api/v2/feerate",
+            ]
         );
     }
 

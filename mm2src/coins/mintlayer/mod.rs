@@ -2,6 +2,7 @@ pub mod address;
 pub mod api_client;
 pub mod coin;
 pub mod config;
+pub mod fee;
 pub mod types;
 pub mod utxo;
 
@@ -14,6 +15,7 @@ pub use coin::{MintlayerCoin, MintlayerCoinBuildError, MintlayerNetworkValidatio
 pub use config::{
     MintlayerActivationRequest, MintlayerApiClientConfig, MintlayerCoinConf, MintlayerNetwork, MintlayerProtocolInfo,
 };
+pub use fee::{MintlayerFeeError, MintlayerFeeRate};
 pub use types::{
     MintlayerAddressInfo, MintlayerAmount, MintlayerChainTip, MintlayerGenesisInfo, MintlayerOutPoint,
     MintlayerTokenBalance, MintlayerUtxo,
