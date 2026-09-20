@@ -3,6 +3,7 @@ pub mod api_client;
 pub mod coin;
 pub mod config;
 pub mod types;
+pub mod utxo;
 
 pub use address::{
     derive_mintlayer_address, mintlayer_address_from_compressed_public_key, mintlayer_coin_type,
@@ -17,3 +18,4 @@ pub use types::{
     MintlayerAddressInfo, MintlayerAmount, MintlayerChainTip, MintlayerGenesisInfo, MintlayerOutPoint,
     MintlayerTokenBalance, MintlayerUtxo,
 };
+pub use utxo::{select_spendable_coin_utxos, MintlayerCoinUtxo, MintlayerUtxoSelection, MintlayerUtxoSelectionError};
