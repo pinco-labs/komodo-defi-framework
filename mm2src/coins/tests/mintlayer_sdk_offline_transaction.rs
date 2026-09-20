@@ -1,5 +1,7 @@
+use coins::mintlayer::{select_spendable_coin_utxos, MintlayerUtxo};
 use mintlayer_sdk::crypto::types::*;
 use mintlayer_sdk::crypto::{self, Amount, Network, SigHashType, SourceId, TxAdditionalInfo};
+use serde_json::json;
 
 const PUBLIC_TEST_MNEMONIC: &str =
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
@@ -66,4 +68,118 @@ fn build_sign_serialize_and_decode_mainnet_transaction_offline() {
     println!("implicit fee:     {} atoms", INPUT_ATOMS - OUTPUT_ATOMS);
     println!("challenge verify: OK");
     println!("submission:       disabled by construction");
+}
+
+#[test]
+fn select_api_utxo_build_sign_and_decode_with_change_offline() {
+    const INPUT_ATOMS: u128 = 100_000;
+    const SEND_ATOMS: u128 = 80_000;
+    const FEE_ATOMS: u128 = 10_000;
+    const EXPECTED_CHANGE_ATOMS: u128 = 10_000;
+
+    let network = Network::Mainnet;
+    let account_key = crypto::make_default_account_privkey(PUBLIC_TEST_MNEMONIC, network, None).unwrap();
+    let spend_key = crypto::make_receiving_address(&account_key, 0).unwrap();
+    let sender_public_key = crypto::public_key_from_private_key(&spend_key);
+    let sender_address = crypto::pubkey_to_pubkeyhash_address(&sender_public_key, network);
+
+    let recipient_key = crypto::make_receiving_address(&account_key, 1).unwrap();
+    let recipient_public_key = crypto::public_key_from_private_key(&recipient_key);
+    let recipient_address = crypto::pubkey_to_pubkeyhash_address(&recipient_public_key, network);
+    drop(recipient_key);
+
+    let source_id = "22".repeat(32);
+    let api_utxo: MintlayerUtxo = serde_json::from_value(json!({
+        "outpoint": {
+            "index": 3,
+            "source_id": source_id,
+            "source_type": "Transaction"
+        },
+        "utxo": {
+            "destination": sender_address.clone(),
+            "type": "Transfer",
+            "value": {
+                "amount": {
+                    "atoms": INPUT_ATOMS.to_string(),
+                    "decimal": "0.000001"
+                },
+                "type": "Coin"
+            }
+        }
+    }))
+    .unwrap();
+
+    let selection =
+        select_spendable_coin_utxos(&[api_utxo], &sender_address, SEND_ATOMS.checked_add(FEE_ATOMS).unwrap()).unwrap();
+    assert_eq!(selection.selected.len(), 1);
+    assert_eq!(selection.total_atoms, INPUT_ATOMS);
+
+    let change_atoms = selection
+        .total_atoms
+        .checked_sub(SEND_ATOMS)
+        .and_then(|remaining| remaining.checked_sub(FEE_ATOMS))
+        .unwrap();
+    assert_eq!(change_atoms, EXPECTED_CHANGE_ATOMS);
+
+    let selected = &selection.selected[0];
+    let source_id_bytes = decode_32_byte_hex(&selected.outpoint.source_id);
+    let hash = H256::from_slice(&source_id_bytes);
+    let encoded_source_id = crypto::encode_outpoint_source_id(hash, SourceId::Transaction);
+    let inputs = vec![crypto::encode_input_for_utxo(
+        encoded_source_id,
+        selected.outpoint.index,
+    )];
+
+    let previous_destination = crypto::encode_destination(&sender_address, network).unwrap();
+    let input_utxos = vec![Some(TxOutput::Transfer(
+        OutputValue::Coin(Amount::from_atoms(selected.atoms)),
+        previous_destination,
+    ))];
+
+    let outputs = vec![
+        crypto::encode_output_transfer(Amount::from_atoms(SEND_ATOMS), &recipient_address, network).unwrap(),
+        crypto::encode_output_transfer(Amount::from_atoms(change_atoms), &sender_address, network).unwrap(),
+    ];
+    let transaction = crypto::encode_transaction(inputs, outputs, 0).unwrap();
+    let transaction_id = crypto::transaction_id(&transaction);
+
+    let witness = crypto::encode_witness(
+        SigHashType::all(),
+        &spend_key,
+        &sender_address,
+        &transaction,
+        &input_utxos,
+        0,
+        &TxAdditionalInfo::new(),
+        INCLUSION_HEIGHT,
+        network,
+    )
+    .unwrap();
+    let signed = crypto::encode_signed_transaction(transaction, vec![witness]).unwrap();
+    let signed_bytes = signed.encode();
+    let decoded = crypto::decode_signed_transaction_to_json(&signed_bytes, network).unwrap();
+    let decoded_json = decoded.to_string();
+
+    assert_eq!(transaction_id.len(), 64);
+    assert!(decoded_json.contains(&recipient_address));
+    assert!(decoded_json.contains(&sender_address));
+    assert!(!signed_bytes.is_empty());
+
+    println!("selected inputs:   {}", selection.selected.len());
+    println!("selected atoms:    {}", selection.total_atoms);
+    println!("send atoms:        {SEND_ATOMS}");
+    println!("change atoms:      {change_atoms}");
+    println!("fee atoms:         {FEE_ATOMS}");
+    println!("transaction id:    {transaction_id}");
+    println!("submission:        disabled by construction");
+}
+
+fn decode_32_byte_hex(value: &str) -> [u8; 32] {
+    assert_eq!(value.len(), 64);
+    let mut decoded = [0_u8; 32];
+    for (index, byte) in decoded.iter_mut().enumerate() {
+        let offset = index * 2;
+        *byte = u8::from_str_radix(&value[offset..offset + 2], 16).unwrap();
+    }
+    decoded
 }
