@@ -2,6 +2,7 @@ use crate::mintlayer::{
     select_spendable_coin_utxos, MintlayerFeeError, MintlayerFeeRate, MintlayerUtxo, MintlayerUtxoSelection,
     MintlayerUtxoSelectionError,
 };
+use keys::KeyPair;
 use mintlayer_sdk::crypto::types::*;
 use mintlayer_sdk::crypto::{self, Amount, Network, SigHashType, SourceId, TxAdditionalInfo};
 use std::convert::TryInto;
@@ -47,6 +48,33 @@ pub enum MintlayerTransactionPlanError {
     FeeDidNotConverge(usize),
     #[error("Mintlayer transaction amount conservation failed")]
     AmountConservation,
+    #[error("Failed to bridge the KDF signing key to the Mintlayer SDK: {0}")]
+    KdfKeyBridge(String),
+}
+
+const SECP256K1_SCHNORR_SCALE_TAG: u8 = 0;
+
+/// Converts the active KDF secp256k1 key into the tagged SCALE representation
+/// expected by the official Mintlayer SDK.
+///
+/// Both temporary byte buffers are cleared before this function returns. The
+/// resulting SDK key remains in memory only for the lifetime chosen by the
+/// caller and is never logged or exported.
+pub fn sdk_private_key_from_kdf_key_pair(key_pair: &KeyPair) -> Result<PrivateKey, MintlayerTransactionPlanError> {
+    let mut kdf_secret = key_pair.private_bytes();
+    let mut tagged_secret = [0_u8; 33];
+    tagged_secret[0] = SECP256K1_SCHNORR_SCALE_TAG;
+    tagged_secret[1..].copy_from_slice(&kdf_secret);
+
+    let decoded = {
+        let mut encoded = tagged_secret.as_slice();
+        PrivateKey::decode_all(&mut encoded)
+            .map_err(|error| MintlayerTransactionPlanError::KdfKeyBridge(error.to_string()))
+    };
+
+    kdf_secret.fill(0);
+    tagged_secret.fill(0);
+    decoded
 }
 
 /// Builds and signs a native Mintlayer transfer entirely in memory.

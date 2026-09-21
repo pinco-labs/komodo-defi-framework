@@ -17,7 +17,10 @@ pub use config::{
     MintlayerActivationRequest, MintlayerApiClientConfig, MintlayerCoinConf, MintlayerNetwork, MintlayerProtocolInfo,
 };
 pub use fee::{MintlayerFeeError, MintlayerFeeRate};
-pub use transaction::{plan_signed_transaction_offline, MintlayerSignedTransactionPlan, MintlayerTransactionPlanError};
+pub use transaction::{
+    plan_signed_transaction_offline, sdk_private_key_from_kdf_key_pair, MintlayerSignedTransactionPlan,
+    MintlayerTransactionPlanError,
+};
 pub use types::{
     MintlayerAddressInfo, MintlayerAmount, MintlayerChainTip, MintlayerGenesisInfo, MintlayerOutPoint,
     MintlayerTokenBalance, MintlayerUtxo,
