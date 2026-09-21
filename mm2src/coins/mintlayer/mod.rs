@@ -3,6 +3,7 @@ pub mod api_client;
 pub mod coin;
 pub mod config;
 pub mod fee;
+pub mod transaction;
 pub mod types;
 pub mod utxo;
 
@@ -16,6 +17,7 @@ pub use config::{
     MintlayerActivationRequest, MintlayerApiClientConfig, MintlayerCoinConf, MintlayerNetwork, MintlayerProtocolInfo,
 };
 pub use fee::{MintlayerFeeError, MintlayerFeeRate};
+pub use transaction::{plan_signed_transaction_offline, MintlayerSignedTransactionPlan, MintlayerTransactionPlanError};
 pub use types::{
     MintlayerAddressInfo, MintlayerAmount, MintlayerChainTip, MintlayerGenesisInfo, MintlayerOutPoint,
     MintlayerTokenBalance, MintlayerUtxo,
