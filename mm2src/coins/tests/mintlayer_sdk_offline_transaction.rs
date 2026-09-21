@@ -326,6 +326,98 @@ fn converges_canonical_fee_from_serialized_transaction_size_offline() {
     println!("submission:        disabled by construction");
 }
 
+#[test]
+fn sdk_size_estimator_is_conservative_across_transaction_shapes() {
+    for &(input_count, include_change) in &[(1_usize, false), (1, true), (2, false), (2, true)] {
+        let (estimated_bytes, serialized_bytes) = measure_signed_transaction_shape(input_count, include_change);
+        let output_count = if include_change { 2 } else { 1 };
+
+        assert!(
+            estimated_bytes >= serialized_bytes,
+            "SDK estimator underestimated {}-input/{}-output transaction",
+            input_count,
+            output_count
+        );
+        assert!(
+            estimated_bytes - serialized_bytes <= 2,
+            "SDK estimator margin unexpectedly exceeded two bytes"
+        );
+
+        println!(
+            "shape: {input_count} input(s), {output_count} output(s) | estimated: {estimated_bytes} | serialized: {serialized_bytes} | margin: {}",
+            estimated_bytes - serialized_bytes
+        );
+    }
+
+    println!("submission:        disabled by construction");
+}
+
+fn measure_signed_transaction_shape(input_count: usize, include_change: bool) -> (usize, usize) {
+    const INPUT_ATOMS: u128 = 100_000_000_000;
+    const RECIPIENT_ATOMS: u128 = 10_000_000_000;
+    const CHANGE_ATOMS: u128 = 20_000_000_000;
+
+    assert!(input_count > 0 && input_count <= 16);
+
+    let network = Network::Mainnet;
+    let account_key = crypto::make_default_account_privkey(PUBLIC_TEST_MNEMONIC, network, None).unwrap();
+    let spend_key = crypto::make_receiving_address(&account_key, 0).unwrap();
+    let sender_public_key = crypto::public_key_from_private_key(&spend_key);
+    let sender_address = crypto::pubkey_to_pubkeyhash_address(&sender_public_key, network);
+
+    let recipient_key = crypto::make_receiving_address(&account_key, 1).unwrap();
+    let recipient_public_key = crypto::public_key_from_private_key(&recipient_key);
+    let recipient_address = crypto::pubkey_to_pubkeyhash_address(&recipient_public_key, network);
+    drop(recipient_key);
+
+    let previous_destination = crypto::encode_destination(&sender_address, network).unwrap();
+    let mut inputs = Vec::with_capacity(input_count);
+    let mut input_utxos = Vec::with_capacity(input_count);
+    for input_index in 0..input_count {
+        let marker = 0x40_u8 + input_index as u8;
+        let fake_hash = H256::from_slice(&[marker; 32]);
+        let source_id = crypto::encode_outpoint_source_id(fake_hash, SourceId::Transaction);
+        inputs.push(crypto::encode_input_for_utxo(source_id, input_index as u32));
+        input_utxos.push(Some(TxOutput::Transfer(
+            OutputValue::Coin(Amount::from_atoms(INPUT_ATOMS)),
+            previous_destination.clone(),
+        )));
+    }
+
+    let mut outputs =
+        vec![crypto::encode_output_transfer(Amount::from_atoms(RECIPIENT_ATOMS), &recipient_address, network).unwrap()];
+    if include_change {
+        outputs
+            .push(crypto::encode_output_transfer(Amount::from_atoms(CHANGE_ATOMS), &sender_address, network).unwrap());
+    }
+
+    let input_destinations = vec![sender_address.as_str(); input_count];
+    let estimated_bytes = crypto::estimate_transaction_size(&inputs, &input_destinations, &outputs, network).unwrap();
+    let transaction = crypto::encode_transaction(inputs, outputs, 0).unwrap();
+
+    let mut witnesses = Vec::with_capacity(input_count);
+    for input_index in 0..input_count {
+        witnesses.push(
+            crypto::encode_witness(
+                SigHashType::all(),
+                &spend_key,
+                &sender_address,
+                &transaction,
+                &input_utxos,
+                input_index,
+                &TxAdditionalInfo::new(),
+                INCLUSION_HEIGHT,
+                network,
+            )
+            .unwrap(),
+        );
+    }
+
+    let signed = crypto::encode_signed_transaction(transaction, witnesses).unwrap();
+    let serialized_bytes = signed.encode().len();
+    (estimated_bytes, serialized_bytes)
+}
+
 fn api_coin_utxo(source_id: String, index: u32, atoms: u128, decimal: &str, destination: &str) -> MintlayerUtxo {
     serde_json::from_value(json!({
         "outpoint": {
