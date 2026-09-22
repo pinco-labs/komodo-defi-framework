@@ -973,7 +973,208 @@ mod tests {
     use super::*;
     use crate::mintlayer::MintlayerApiClientConfig;
     use crypto::{CryptoCtx, KeyPairPolicy};
+    use futures01::Future as Future01;
     use mm2_core::mm_ctx::{MmArc, MmCtxBuilder};
+    use serde_json::json;
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    const WITHDRAW_RECIPIENT: &str = "mtc1qxlpcx3rzm4nlqw2a2atsw9gtuv6lvaeasdrqxjz";
+    const WITHDRAW_FEE_RATE_ATOMS_PER_KB: u128 = 100_000_000_000;
+
+    fn decimal(value: &str) -> BigDecimal {
+        value.parse().unwrap()
+    }
+
+    fn withdraw_request(to: &str) -> WithdrawRequest {
+        WithdrawRequest {
+            coin: "ML".into(),
+            from: None,
+            to: to.into(),
+            amount: decimal("0.5"),
+            max: false,
+            fee: None,
+            memo: None,
+            ibc_source_channel: None,
+            broadcast: false,
+            expiration_seconds: None,
+        }
+    }
+
+    fn bind_withdraw_mock_api() -> (TcpListener, String) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let api_url = format!("http://{}", listener.local_addr().unwrap());
+        (listener, api_url)
+    }
+
+    fn read_request_path(stream: &mut TcpStream) -> String {
+        stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+        let mut request = Vec::new();
+        let mut buffer = [0_u8; 1024];
+
+        loop {
+            let read = stream.read(&mut buffer).unwrap();
+            if read == 0 {
+                break;
+            }
+            request.extend_from_slice(&buffer[..read]);
+            if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                break;
+            }
+            assert!(request.len() <= 16 * 1024, "mock HTTP request too large");
+        }
+
+        let request = String::from_utf8(request).unwrap();
+        request
+            .lines()
+            .next()
+            .and_then(|line| line.split_whitespace().nth(1))
+            .expect("HTTP request path")
+            .to_owned()
+    }
+
+    fn respond_json(stream: &mut TcpStream, body: &str) {
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.as_bytes().len(),
+            body
+        );
+        stream.write_all(response.as_bytes()).unwrap();
+        stream.flush().unwrap();
+    }
+
+    fn spawn_withdraw_mock_api(listener: TcpListener, sender: String) -> thread::JoinHandle<Vec<String>> {
+        thread::spawn(move || {
+            let spendable_path = format!("/api/v2/address/{sender}/spendable-utxos");
+            let deadline = Instant::now() + Duration::from_secs(10);
+            let mut requested_paths = Vec::new();
+
+            while requested_paths.len() < 3 && Instant::now() < deadline {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        let path = read_request_path(&mut stream);
+                        let body = match path.as_str() {
+                            value if value == spendable_path => json!([{
+                                "outpoint": {
+                                    "index": 0,
+                                    "source_id": "11".repeat(32),
+                                    "source_type": "Transaction"
+                                },
+                                "utxo": {
+                                    "destination": sender.clone(),
+                                    "type": "Transfer",
+                                    "value": {
+                                        "amount": { "atoms": "100000000000", "decimal": "1" },
+                                        "type": "Coin"
+                                    }
+                                }
+                            }])
+                            .to_string(),
+                            "/api/v2/feerate" => format!("\"{WITHDRAW_FEE_RATE_ATOMS_PER_KB}\""),
+                            "/api/v2/chain/tip" => json!({
+                                "block_height": 700000,
+                                "block_id": "22".repeat(32)
+                            })
+                            .to_string(),
+                            other => panic!("unexpected mock API request: {}", other),
+                        };
+
+                        respond_json(&mut stream, &body);
+                        requested_paths.push(path);
+                    },
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(10));
+                    },
+                    Err(error) => panic!("mock API accept failed: {}", error),
+                }
+            }
+
+            assert_eq!(requested_paths.len(), 3, "mock API did not receive all requests");
+            requested_paths
+        })
+    }
+
+    #[test]
+    fn mmcoin_withdraw_builds_signed_transaction_from_loopback_api() {
+        let (listener, api_url) = bind_withdraw_mock_api();
+        let coin = MintlayerCoin::new(
+            &test_ctx(),
+            valid_conf(),
+            request_with_urls(vec![api_url]),
+            iguana_policy(),
+        )
+        .unwrap();
+        let sender = coin.address().to_owned();
+        let server = spawn_withdraw_mock_api(listener, sender.clone());
+
+        let details = MmCoin::withdraw(&coin, withdraw_request(WITHDRAW_RECIPIENT))
+            .wait()
+            .unwrap();
+        let requested_paths = server.join().unwrap();
+
+        assert_eq!(
+            requested_paths,
+            vec![
+                format!("/api/v2/address/{sender}/spendable-utxos"),
+                "/api/v2/feerate".to_owned(),
+                "/api/v2/chain/tip".to_owned(),
+            ]
+        );
+        assert_eq!(details.from, vec![sender]);
+        assert_eq!(details.to, vec![WITHDRAW_RECIPIENT.to_owned()]);
+        assert_eq!(details.total_amount, decimal("1"));
+        assert_eq!(details.spent_by_me, decimal("1"));
+        assert_eq!(details.received_by_me, decimal("0.296"));
+        assert_eq!(details.my_balance_change, decimal("-0.704"));
+        assert_eq!(details.block_height, 0);
+        assert!(details.timestamp > 0);
+        assert_eq!(details.coin, "ML");
+        assert_eq!(details.internal_id.0.len(), 32);
+
+        match &details.tx {
+            TransactionData::Signed { tx_hex, tx_hash } => {
+                assert_eq!(tx_hex.0.len(), 204);
+                assert_eq!(hex::decode(tx_hash).unwrap().len(), 32);
+            },
+            other => panic!("expected signed Mintlayer transaction, got {:?}", other),
+        }
+
+        match details.fee_details.as_ref() {
+            Some(TxFeeDetails::Utxo(fee)) => {
+                assert_eq!(fee.coin.as_deref(), Some("ML"));
+                assert_eq!(fee.amount, decimal("0.204"));
+            },
+            other => panic!("expected Mintlayer UTXO fee details, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn mmcoin_withdraw_rejects_unsupported_requests_before_network() {
+        let coin = MintlayerCoin::new(
+            &test_ctx(),
+            valid_conf(),
+            request_with_urls(vec!["http://127.0.0.1:9/api/v2".into()]),
+            iguana_policy(),
+        )
+        .unwrap();
+
+        let mut broadcast = withdraw_request(WITHDRAW_RECIPIENT);
+        broadcast.broadcast = true;
+        let broadcast_error = MmCoin::withdraw(&coin, broadcast).wait().unwrap_err();
+        assert!(format!("{broadcast_error:?}").contains("broadcast remains disabled"));
+
+        let mut max = withdraw_request(WITHDRAW_RECIPIENT);
+        max.max = true;
+        let max_error = MmCoin::withdraw(&coin, max).wait().unwrap_err();
+        assert!(format!("{max_error:?}").contains("max mode is not implemented"));
+
+        let invalid_address = withdraw_request("not-a-mintlayer-address");
+        let address_error = MmCoin::withdraw(&coin, invalid_address).wait().unwrap_err();
+        assert!(format!("{address_error:?}").contains("InvalidAddress"));
+    }
 
     const TEST_MNEMONIC: &str =
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
