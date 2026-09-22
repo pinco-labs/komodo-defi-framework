@@ -2,14 +2,17 @@ use crate::coin_errors::{AddressFromPubkeyError, MyAddressError};
 use crate::hd_wallet::HDAddressSelector;
 use crate::mintlayer::address::validate_mintlayer_address;
 use crate::mintlayer::{
-    mintlayer_address_from_compressed_public_key, mintlayer_derivation_path, MintlayerActivationRequest,
-    MintlayerAddressInfo, MintlayerApiClient, MintlayerApiError, MintlayerChainTip, MintlayerCoinConf,
-    MintlayerNetwork, MintlayerUtxo,
+    mintlayer_address_from_compressed_public_key, mintlayer_derivation_path, plan_signed_transaction_offline,
+    sdk_private_key_from_kdf_key_pair, MintlayerActivationRequest, MintlayerAddressInfo, MintlayerApiClient,
+    MintlayerApiError, MintlayerChainTip, MintlayerCoinConf, MintlayerNetwork, MintlayerSignedTransactionPlan,
+    MintlayerUtxo,
 };
+use crate::utxo::UtxoFeeDetails;
 use crate::{
     BalanceError, BalanceFut, CoinBalance, ConfirmPaymentInput, DerivationMethodResponse, MarketCoinOps,
-    PrivKeyBuildPolicy, SignatureError, SignatureResult, TransactionEnum, TransactionErr, TransactionResult,
-    TxMarshalingErr, UnexpectedDerivationMethod, VerificationError, VerificationResult, WaitForHTLCTxSpendArgs,
+    PrivKeyBuildPolicy, SignatureError, SignatureResult, TransactionData, TransactionDetails, TransactionEnum,
+    TransactionErr, TransactionResult, TxFeeDetails, TxMarshalingErr, UnexpectedDerivationMethod, VerificationError,
+    VerificationResult, WaitForHTLCTxSpendArgs,
 };
 use crate::{
     CheckIfMyPaymentSentArgs, DexFee, FeeApproxStage, FoundSwapTxSpend, HistorySyncState, MmCoin,
@@ -21,6 +24,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use common::executor::AbortedError;
+use common::now_sec;
 use rpc::v1::types::Bytes as BytesJson;
 use serde_json::Value as Json;
 
@@ -32,6 +36,7 @@ use derive_more::Display;
 use futures::{FutureExt, TryFutureExt};
 use futures01::Future;
 use keys::KeyPair;
+use mintlayer_sdk::crypto::Network as SdkNetwork;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::{BigDecimal, BigInt, MmNumber};
@@ -280,6 +285,190 @@ impl MintlayerCoin {
     }
 }
 
+fn mintlayer_sdk_network(network: MintlayerNetwork) -> SdkNetwork {
+    match network {
+        MintlayerNetwork::Mainnet => SdkNetwork::Mainnet,
+        MintlayerNetwork::Testnet => SdkNetwork::Testnet,
+        MintlayerNetwork::Regtest => SdkNetwork::Regtest,
+        MintlayerNetwork::Signet => SdkNetwork::Signet,
+    }
+}
+
+fn mintlayer_atoms_from_decimal(amount: &BigDecimal) -> Result<u128, String> {
+    let rendered = amount.to_string();
+    let rendered = rendered.strip_prefix('+').unwrap_or(&rendered);
+    if rendered.starts_with('-') {
+        return Err("Mintlayer withdrawal amount cannot be negative".into());
+    }
+
+    let mut parts = rendered.split('.');
+    let integer = parts.next().unwrap_or_default();
+    let fractional = parts.next().unwrap_or_default();
+    if parts.next().is_some()
+        || integer.is_empty()
+        || !integer.bytes().all(|byte| byte.is_ascii_digit())
+        || !fractional.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return Err(format!("Invalid Mintlayer decimal amount: {rendered}"));
+    }
+
+    let decimals = MINTLAYER_DECIMALS as usize;
+    let (kept_fractional, excess_fractional) = if fractional.len() > decimals {
+        fractional.split_at(decimals)
+    } else {
+        (fractional, "")
+    };
+    if !excess_fractional.bytes().all(|byte| byte == b'0') {
+        return Err(format!(
+            "Mintlayer amount has more than {MINTLAYER_DECIMALS} decimal places: {rendered}"
+        ));
+    }
+
+    let scale = 10_u128.pow(MINTLAYER_DECIMALS as u32);
+    let integer_atoms = integer
+        .parse::<u128>()
+        .map_err(|error| format!("Invalid Mintlayer amount '{rendered}': {error}"))?
+        .checked_mul(scale)
+        .ok_or_else(|| format!("Mintlayer amount overflow: {rendered}"))?;
+
+    let mut padded_fractional = kept_fractional.to_owned();
+    padded_fractional.push_str(&"0".repeat(decimals - kept_fractional.len()));
+    let fractional_atoms = if padded_fractional.is_empty() {
+        0
+    } else {
+        padded_fractional
+            .parse::<u128>()
+            .map_err(|error| format!("Invalid Mintlayer amount '{rendered}': {error}"))?
+    };
+
+    integer_atoms
+        .checked_add(fractional_atoms)
+        .ok_or_else(|| format!("Mintlayer amount overflow: {rendered}"))
+}
+
+fn mintlayer_decimal_from_atoms(atoms: u128) -> BigDecimal {
+    BigDecimal::new(BigInt::from(atoms), MINTLAYER_DECIMALS as i64)
+}
+
+fn mintlayer_withdraw_details(
+    ticker: &str,
+    sender: String,
+    recipient: String,
+    plan: MintlayerSignedTransactionPlan,
+) -> Result<TransactionDetails, WithdrawError> {
+    let transaction_id = plan.transaction_id.clone();
+    let internal_id = hex::decode(&transaction_id)
+        .map_err(|error| WithdrawError::InternalError(format!("Invalid Mintlayer transaction ID: {error}")))?;
+    let spent_by_me = mintlayer_decimal_from_atoms(plan.selected_atoms);
+    let received_by_me = mintlayer_decimal_from_atoms(plan.change_atoms);
+    let fee_amount = mintlayer_decimal_from_atoms(plan.fee_atoms);
+
+    Ok(TransactionDetails {
+        tx: TransactionData::new_signed(plan.signed_bytes.into(), transaction_id),
+        from: vec![sender],
+        to: vec![recipient],
+        total_amount: spent_by_me.clone(),
+        spent_by_me: spent_by_me.clone(),
+        received_by_me: received_by_me.clone(),
+        my_balance_change: received_by_me - spent_by_me,
+        block_height: 0,
+        timestamp: now_sec(),
+        fee_details: Some(TxFeeDetails::Utxo(UtxoFeeDetails {
+            coin: Some(ticker.to_owned()),
+            amount: fee_amount,
+        })),
+        coin: ticker.to_owned(),
+        internal_id: internal_id.into(),
+        kmd_rewards: None,
+        transaction_type: Default::default(),
+        memo: None,
+    })
+}
+
+async fn build_mintlayer_withdraw(
+    coin: MintlayerCoin,
+    req: WithdrawRequest,
+) -> Result<TransactionDetails, WithdrawError> {
+    if req.coin != coin.ticker() {
+        return Err(WithdrawError::UnsupportedError(format!(
+            "Mintlayer withdraw request coin '{}' does not match '{}'",
+            req.coin,
+            coin.ticker()
+        )));
+    }
+    if req.from.is_some() {
+        return Err(WithdrawError::UnsupportedError(
+            "Mintlayer withdraw does not support an alternate from address yet".into(),
+        ));
+    }
+    if req.max {
+        return Err(WithdrawError::UnsupportedError(
+            "Mintlayer withdraw max mode is not implemented yet".into(),
+        ));
+    }
+    if req.fee.is_some() {
+        return Err(WithdrawError::InvalidFeePolicy(
+            "Mintlayer withdraw currently uses the canonical API fee rate only".into(),
+        ));
+    }
+    if req.memo.is_some() {
+        return Err(WithdrawError::UnsupportedError(
+            "Mintlayer withdraw memo is not supported".into(),
+        ));
+    }
+    if req.ibc_source_channel.is_some() || req.expiration_seconds.is_some() {
+        return Err(WithdrawError::UnsupportedError(
+            "Unsupported protocol-specific Mintlayer withdraw fields".into(),
+        ));
+    }
+    if req.broadcast {
+        return Err(WithdrawError::UnsupportedError(
+            "Mintlayer withdraw is build-and-sign only; broadcast remains disabled".into(),
+        ));
+    }
+
+    validate_mintlayer_address(coin.network(), &req.to)
+        .map_err(|error| WithdrawError::InvalidAddress(error.to_string()))?;
+    let send_atoms = mintlayer_atoms_from_decimal(&req.amount).map_err(WithdrawError::InternalError)?;
+    if send_atoms == 0 {
+        return Err(WithdrawError::UnsupportedError(
+            "Mintlayer withdrawal amount must be greater than zero".into(),
+        ));
+    }
+
+    let sender = coin.address().to_owned();
+    let utxos = coin
+        .spendable_utxos(&sender)
+        .await
+        .map_err(|error| WithdrawError::Transport(error.to_string()))?;
+    let fee_rate = coin
+        .api_client()
+        .fee_rate()
+        .await
+        .map_err(|error| WithdrawError::Transport(error.to_string()))?;
+    let chain_tip = coin
+        .chain_tip()
+        .await
+        .map_err(|error| WithdrawError::Transport(error.to_string()))?;
+
+    let sdk_private_key = sdk_private_key_from_kdf_key_pair(&coin.key_pair)
+        .map_err(|error| WithdrawError::InternalError(error.to_string()))?;
+    let plan = plan_signed_transaction_offline(
+        &utxos,
+        &sender,
+        &req.to,
+        send_atoms,
+        fee_rate,
+        &sdk_private_key,
+        chain_tip.block_height,
+        mintlayer_sdk_network(coin.network()),
+    )
+    .map_err(|error| WithdrawError::InternalError(error.to_string()))?;
+    drop(sdk_private_key);
+
+    mintlayer_withdraw_details(coin.ticker(), sender, req.to, plan)
+}
+
 #[async_trait]
 impl MarketCoinOps for MintlayerCoin {
     fn ticker(&self) -> &str {
@@ -521,10 +710,10 @@ impl MmCoin for MintlayerCoin {
         self.abortable_system.weak_spawner()
     }
 
-    fn withdraw(&self, _req: WithdrawRequest) -> WithdrawFut {
-        Box::new(futures01::future::err(MmError::new(WithdrawError::UnsupportedError(
-            MINTLAYER_WALLET_ONLY_REASON.into(),
-        ))))
+    fn withdraw(&self, req: WithdrawRequest) -> WithdrawFut {
+        let coin = self.clone();
+        let future = async move { build_mintlayer_withdraw(coin, req).await.map_err(MmError::new) };
+        Box::new(future.boxed().compat())
     }
 
     fn get_raw_transaction(&self, _req: RawTransactionRequest) -> RawTransactionFut<'_> {
@@ -855,6 +1044,27 @@ mod tests {
             coin_balance_from_address_info(address_info),
             Err(BalanceError::InvalidResponse(_))
         ));
+    }
+
+    #[test]
+    fn converts_mintlayer_decimal_amounts_to_atoms_exactly() {
+        let one: BigDecimal = "1".parse().unwrap();
+        let fractional: BigDecimal = "1.23456789012".parse().unwrap();
+        let trailing_zero: BigDecimal = "0.100000000000".parse().unwrap();
+        let too_precise: BigDecimal = "0.000000000001".parse().unwrap();
+
+        assert_eq!(mintlayer_atoms_from_decimal(&one).unwrap(), 100_000_000_000);
+        assert_eq!(mintlayer_atoms_from_decimal(&fractional).unwrap(), 123_456_789_012);
+        assert_eq!(mintlayer_atoms_from_decimal(&trailing_zero).unwrap(), 10_000_000_000);
+        assert!(mintlayer_atoms_from_decimal(&too_precise).is_err());
+    }
+
+    #[test]
+    fn maps_every_kdf_mintlayer_network_to_sdk() {
+        assert_eq!(mintlayer_sdk_network(MintlayerNetwork::Mainnet), SdkNetwork::Mainnet);
+        assert_eq!(mintlayer_sdk_network(MintlayerNetwork::Testnet), SdkNetwork::Testnet);
+        assert_eq!(mintlayer_sdk_network(MintlayerNetwork::Regtest), SdkNetwork::Regtest);
+        assert_eq!(mintlayer_sdk_network(MintlayerNetwork::Signet), SdkNetwork::Signet);
     }
 
     #[test]
