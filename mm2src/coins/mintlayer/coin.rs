@@ -2,10 +2,11 @@ use crate::coin_errors::{AddressFromPubkeyError, MyAddressError};
 use crate::hd_wallet::HDAddressSelector;
 use crate::mintlayer::address::validate_mintlayer_address;
 use crate::mintlayer::{
-    broadcast_signed_transaction_hex, mintlayer_address_from_compressed_public_key, mintlayer_derivation_path,
-    plan_signed_transaction_offline, sdk_private_key_from_kdf_key_pair, MintlayerActivationRequest,
-    MintlayerAddressInfo, MintlayerApiClient, MintlayerApiError, MintlayerChainTip, MintlayerCoinConf,
-    MintlayerNetwork, MintlayerNodeClientConfig, MintlayerSignedTransactionPlan, MintlayerUtxo,
+    broadcast_signed_transaction_hex, canonical_transaction_id_from_signed_bytes,
+    mintlayer_address_from_compressed_public_key, mintlayer_derivation_path, plan_signed_transaction_offline,
+    sdk_private_key_from_kdf_key_pair, MintlayerActivationRequest, MintlayerAddressInfo, MintlayerApiClient,
+    MintlayerApiError, MintlayerChainTip, MintlayerCoinConf, MintlayerNetwork, MintlayerNodeClientConfig,
+    MintlayerSignedTransactionPlan, MintlayerUtxo,
 };
 use crate::utxo::UtxoFeeDetails;
 use crate::{
@@ -561,16 +562,39 @@ impl MarketCoinOps for MintlayerCoin {
         self.ticker()
     }
 
-    fn send_raw_tx(&self, _tx: &str) -> Box<dyn Future<Item = String, Error = String> + Send> {
-        Box::new(futures01::future::err(
-            "Mintlayer raw transaction broadcast is not implemented".to_string(),
-        ))
+    fn send_raw_tx(&self, tx: &str) -> Box<dyn Future<Item = String, Error = String> + Send> {
+        let bytes = match hex::decode(tx) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                return Box::new(futures01::future::err(format!(
+                    "Invalid Mintlayer transaction hex: {error}"
+                )));
+            },
+        };
+        self.send_raw_tx_bytes(&bytes)
     }
 
-    fn send_raw_tx_bytes(&self, _tx: &[u8]) -> Box<dyn Future<Item = String, Error = String> + Send> {
-        Box::new(futures01::future::err(
-            "Mintlayer raw transaction broadcast is not implemented".to_string(),
-        ))
+    fn send_raw_tx_bytes(&self, tx: &[u8]) -> Box<dyn Future<Item = String, Error = String> + Send> {
+        let tx_id = match canonical_transaction_id_from_signed_bytes(tx) {
+            Ok(tx_id) => tx_id,
+            Err(error) => return Box::new(futures01::future::err(error.to_string())),
+        };
+        let node_client = match self.node_client() {
+            Some(client) => client,
+            None => {
+                return Box::new(futures01::future::err(
+                    "Mintlayer node RPC is not configured".to_string(),
+                ));
+            },
+        };
+        let tx_hex = hex::encode(tx);
+        let future = async move {
+            broadcast_signed_transaction_hex(&node_client, &tx_hex)
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(tx_id)
+        };
+        Box::new(future.boxed().compat())
     }
 
     fn wait_for_confirmations(&self, _input: ConfirmPaymentInput) -> Box<dyn Future<Item = (), Error = String> + Send> {
@@ -1037,6 +1061,7 @@ mod tests {
     use super::*;
     use crate::mintlayer::MintlayerApiClientConfig;
     use crypto::{CryptoCtx, KeyPairPolicy};
+    use futures::compat::Future01CompatExt;
     use futures01::Future as Future01;
     use mm2_core::mm_ctx::{MmArc, MmCtxBuilder};
     use serde_json::json;
@@ -1268,6 +1293,96 @@ mod tests {
 
     fn test_ctx() -> MmArc {
         MmCtxBuilder::default().into_mm_arc()
+    }
+
+    #[tokio::test]
+    async fn send_raw_tx_bytes_uses_canonical_txid_and_loopback_broadcaster() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::thread;
+
+        let (api_listener, api_url) = bind_withdraw_mock_api();
+        let build_coin = MintlayerCoin::new(
+            &test_ctx(),
+            valid_conf(),
+            request_with_urls(vec![api_url]),
+            iguana_policy(),
+        )
+        .unwrap();
+        let sender = build_coin.address().to_owned();
+        let api_server = spawn_withdraw_mock_api(api_listener, sender);
+
+        let details = MmCoin::withdraw(&build_coin, withdraw_request(WITHDRAW_RECIPIENT))
+            .wait()
+            .unwrap();
+        api_server.join().unwrap();
+
+        let (signed_bytes, expected_txid) = match details.tx {
+            TransactionData::Signed { tx_hex, tx_hash } => (tx_hex.0, tx_hash),
+            other => panic!("expected signed Mintlayer transaction, got {:?}", other),
+        };
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint = format!("http://{}", listener.local_addr().unwrap());
+        let expected_hex = hex::encode(&signed_bytes);
+
+        let server = thread::spawn({
+            let expected_hex = expected_hex.clone();
+            move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut request = Vec::new();
+                let mut buffer = [0_u8; 4096];
+
+                loop {
+                    let read = stream.read(&mut buffer).unwrap();
+                    if read == 0 {
+                        break;
+                    }
+                    request.extend_from_slice(&buffer[..read]);
+
+                    if let Some(pos) = request.windows(4).position(|w| w == b"\r\n\r\n") {
+                        let end = pos + 4;
+                        let headers = String::from_utf8_lossy(&request[..end]);
+                        let len = headers
+                            .lines()
+                            .find_map(|line| {
+                                line.to_ascii_lowercase()
+                                    .strip_prefix("content-length: ")
+                                    .map(str::to_owned)
+                            })
+                            .and_then(|v| v.trim().parse::<usize>().ok())
+                            .unwrap_or(0);
+                        if request.len() >= end + len {
+                            break;
+                        }
+                    }
+                }
+
+                let body_start = request.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
+                let body: serde_json::Value = serde_json::from_slice(&request[body_start..]).unwrap();
+                assert_eq!(body["method"], "p2p_submit_transaction");
+                assert_eq!(body["params"]["tx"], expected_hex);
+                assert_eq!(body["params"]["options"]["trust_policy"], "Trusted");
+
+                let response_body =
+                    serde_json::json!({"jsonrpc":"2.0","id":body["id"].clone(),"result":null}).to_string();
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    response_body.len(),
+                    response_body
+                )
+                .unwrap();
+            }
+        });
+
+        let mut request = request_with_urls(vec![concat!("https", "://api.example").into()]);
+        request.node_conf = Some(MintlayerNodeClientConfig { rpc_url: endpoint });
+        let coin = MintlayerCoin::new(&test_ctx(), valid_conf(), request, iguana_policy()).unwrap();
+
+        let returned_txid = coin.send_raw_tx_bytes(&signed_bytes).compat().await.unwrap();
+        assert_eq!(returned_txid, expected_txid);
+        server.join().unwrap();
     }
 
     #[tokio::test]
