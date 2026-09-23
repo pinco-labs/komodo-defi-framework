@@ -2,10 +2,10 @@ use crate::coin_errors::{AddressFromPubkeyError, MyAddressError};
 use crate::hd_wallet::HDAddressSelector;
 use crate::mintlayer::address::validate_mintlayer_address;
 use crate::mintlayer::{
-    mintlayer_address_from_compressed_public_key, mintlayer_derivation_path, plan_signed_transaction_offline,
-    sdk_private_key_from_kdf_key_pair, MintlayerActivationRequest, MintlayerAddressInfo, MintlayerApiClient,
-    MintlayerApiError, MintlayerChainTip, MintlayerCoinConf, MintlayerNetwork, MintlayerNodeClientConfig,
-    MintlayerSignedTransactionPlan, MintlayerUtxo,
+    broadcast_signed_transaction_hex, mintlayer_address_from_compressed_public_key, mintlayer_derivation_path,
+    plan_signed_transaction_offline, sdk_private_key_from_kdf_key_pair, MintlayerActivationRequest,
+    MintlayerAddressInfo, MintlayerApiClient, MintlayerApiError, MintlayerChainTip, MintlayerCoinConf,
+    MintlayerNetwork, MintlayerNodeClientConfig, MintlayerSignedTransactionPlan, MintlayerUtxo,
 };
 use crate::utxo::UtxoFeeDetails;
 use crate::{
@@ -402,6 +402,25 @@ fn mintlayer_withdraw_details(
         transaction_type: Default::default(),
         memo: None,
     })
+}
+
+async fn broadcast_mintlayer_transaction_data(coin: &MintlayerCoin, tx: &TransactionData) -> Result<String, String> {
+    let node_client = coin
+        .node_client()
+        .ok_or_else(|| "Mintlayer node RPC is not configured".to_owned())?;
+    let tx_hex = tx
+        .tx_hex()
+        .ok_or_else(|| "Mintlayer broadcast requires signed transaction data".to_owned())?;
+    let tx_hash = tx
+        .tx_hash()
+        .ok_or_else(|| "Mintlayer broadcast requires a canonical transaction ID".to_owned())?
+        .to_owned();
+
+    broadcast_signed_transaction_hex(&node_client, &hex::encode(&tx_hex.0))
+        .await
+        .map_err(|error| error.to_string())?;
+
+    Ok(tx_hash)
 }
 
 async fn build_mintlayer_withdraw(
@@ -1249,6 +1268,69 @@ mod tests {
 
     fn test_ctx() -> MmArc {
         MmCtxBuilder::default().into_mm_arc()
+    }
+
+    #[tokio::test]
+    async fn transaction_data_broadcast_orchestrator_preserves_bytes_and_canonical_txid() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::thread;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint = format!("http://{}", listener.local_addr().unwrap());
+        let expected_bytes = vec![0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef];
+        let expected_hex = hex::encode(&expected_bytes);
+        let expected_txid = "11".repeat(32);
+
+        let server = thread::spawn({
+            let expected_hex = expected_hex.clone();
+            move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut request = Vec::new();
+                let mut buffer = [0_u8; 4096];
+                loop {
+                    let read = stream.read(&mut buffer).unwrap();
+                    if read == 0 {
+                        break;
+                    }
+                    request.extend_from_slice(&buffer[..read]);
+                    if let Some(header_pos) = request.windows(4).position(|w| w == b"\r\n\r\n") {
+                        let header_end = header_pos + 4;
+                        let headers = String::from_utf8_lossy(&request[..header_end]);
+                        let length = headers
+                            .lines()
+                            .find_map(|line| {
+                                line.to_ascii_lowercase()
+                                    .strip_prefix("content-length: ")
+                                    .map(str::to_owned)
+                            })
+                            .and_then(|v| v.trim().parse::<usize>().ok())
+                            .unwrap_or(0);
+                        if request.len() >= header_end + length {
+                            break;
+                        }
+                    }
+                }
+                let body_start = request.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
+                let body: serde_json::Value = serde_json::from_slice(&request[body_start..]).unwrap();
+                assert_eq!(body["method"], "p2p_submit_transaction");
+                assert_eq!(body["params"]["tx"], expected_hex);
+                assert_eq!(body["params"]["options"]["trust_policy"], "Trusted");
+                let response_body =
+                    serde_json::json!({"jsonrpc":"2.0","id":body["id"].clone(),"result":null}).to_string();
+                write!(stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    response_body.len(), response_body).unwrap();
+            }
+        });
+
+        let mut request = request_with_urls(vec![concat!("https", "://api.example").into()]);
+        request.node_conf = Some(MintlayerNodeClientConfig { rpc_url: endpoint });
+        let coin = MintlayerCoin::new(&test_ctx(), valid_conf(), request, iguana_policy()).unwrap();
+        let tx = TransactionData::new_signed(expected_bytes.into(), expected_txid.clone());
+        let returned_txid = broadcast_mintlayer_transaction_data(&coin, &tx).await.unwrap();
+        assert_eq!(returned_txid, expected_txid);
+        server.join().unwrap();
     }
 
     #[test]
