@@ -60,6 +60,17 @@ const SECP256K1_SCHNORR_SCALE_TAG: u8 = 0;
 /// Both temporary byte buffers are cleared before this function returns. The
 /// resulting SDK key remains in memory only for the lifetime chosen by the
 /// caller and is never logged or exported.
+/// Recovers the canonical Mintlayer transaction id from encoded signed-transaction bytes.
+///
+/// Signed transaction encoding starts with the underlying Transaction; the pinned SDK
+/// lenient decoder reads that prefix and the canonical id is computed from it.
+pub fn canonical_transaction_id_from_signed_bytes(
+    signed_bytes: &[u8],
+) -> Result<String, MintlayerTransactionPlanError> {
+    let transaction = crypto::decode_transaction_lenient(signed_bytes).map_err(sdk_error)?;
+    Ok(crypto::transaction_id(&transaction))
+}
+
 pub fn sdk_private_key_from_kdf_key_pair(key_pair: &KeyPair) -> Result<PrivateKey, MintlayerTransactionPlanError> {
     let mut kdf_secret = key_pair.private_bytes();
     let mut tagged_secret = [0_u8; 33];
@@ -321,6 +332,38 @@ mod tests {
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
     const FEE_RATE_ATOMS_PER_KB: u128 = 100_000_000_000;
     const INCLUSION_HEIGHT: u64 = 700_000;
+
+    #[test]
+    fn recovers_canonical_transaction_id_from_signed_bytes() {
+        let network = Network::Mainnet;
+        let account_key = crypto::make_default_account_privkey(PUBLIC_TEST_MNEMONIC, network, None).unwrap();
+        let spend_key = crypto::make_receiving_address(&account_key, 0).unwrap();
+        let sender_address = address_for_key(&spend_key, network);
+        let recipient_key = crypto::make_receiving_address(&account_key, 1).unwrap();
+        let recipient_address = address_for_key(&recipient_key, network);
+
+        let utxos = vec![
+            coin_utxo("11".repeat(32), 0, 60_000_000_000, "0.6", &sender_address),
+            coin_utxo("22".repeat(32), 1, 40_000_000_000, "0.4", &sender_address),
+        ];
+
+        let plan = plan_signed_transaction_offline(
+            &utxos,
+            &sender_address,
+            &recipient_address,
+            50_000_000_000,
+            MintlayerFeeRate::from_atoms_per_kb(FEE_RATE_ATOMS_PER_KB),
+            &spend_key,
+            INCLUSION_HEIGHT,
+            network,
+        )
+        .unwrap();
+
+        assert_eq!(
+            canonical_transaction_id_from_signed_bytes(&plan.signed_bytes).unwrap(),
+            plan.transaction_id
+        );
+    }
 
     #[test]
     fn plans_and_signs_canonical_transaction_without_submission() {
