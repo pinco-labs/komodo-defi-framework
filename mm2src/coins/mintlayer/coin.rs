@@ -479,12 +479,6 @@ async fn build_mintlayer_withdraw(
             "Unsupported protocol-specific Mintlayer withdraw fields".into(),
         ));
     }
-    if req.broadcast {
-        return Err(WithdrawError::UnsupportedError(
-            "Mintlayer withdraw is build-and-sign only; broadcast remains disabled".into(),
-        ));
-    }
-
     validate_mintlayer_address(coin.network(), &req.to)
         .map_err(|error| WithdrawError::InvalidAddress(error.to_string()))?;
     let send_atoms = mintlayer_atoms_from_decimal(&req.amount).map_err(WithdrawError::InternalError)?;
@@ -794,7 +788,20 @@ impl MmCoin for MintlayerCoin {
 
     fn withdraw(&self, req: WithdrawRequest) -> WithdrawFut {
         let coin = self.clone();
-        let future = async move { build_mintlayer_withdraw(coin, req).await.map_err(MmError::new) };
+        let future = async move {
+            let broadcast = req.broadcast;
+            let details = build_mintlayer_withdraw(coin.clone(), req)
+                .await
+                .map_err(MmError::new)?;
+
+            if broadcast {
+                broadcast_mintlayer_transaction_data(&coin, &details.tx)
+                    .await
+                    .map_err(|error| MmError::new(WithdrawError::Transport(error)))?;
+            }
+
+            Ok(details)
+        };
         Box::new(future.boxed().compat())
     }
 
@@ -1265,6 +1272,135 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn mmcoin_withdraw_broadcasts_exact_signed_transaction_when_requested() {
+        use std::sync::mpsc;
+
+        let (api_listener, api_url) = bind_withdraw_mock_api();
+
+        let node_listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let node_endpoint = format!("http://{}", node_listener.local_addr().unwrap());
+        let (tx_sender, tx_receiver) = mpsc::channel();
+
+        let node_server = thread::spawn(move || {
+            let (mut stream, _) = node_listener.accept().unwrap();
+            stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+
+            let mut request = Vec::new();
+            let mut buffer = [0_u8; 4096];
+
+            loop {
+                let read = stream.read(&mut buffer).unwrap();
+                if read == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..read]);
+
+                if let Some(pos) = request.windows(4).position(|w| w == b"\r\n\r\n") {
+                    let header_end = pos + 4;
+                    let headers = String::from_utf8_lossy(&request[..header_end]);
+                    let content_length = headers
+                        .lines()
+                        .find_map(|line| {
+                            line.to_ascii_lowercase()
+                                .strip_prefix("content-length: ")
+                                .map(str::to_owned)
+                        })
+                        .and_then(|value| value.trim().parse::<usize>().ok())
+                        .unwrap_or(0);
+
+                    if request.len() >= header_end + content_length {
+                        break;
+                    }
+                }
+
+                assert!(request.len() <= 64 * 1024, "mock Node RPC request too large");
+            }
+
+            let body_start = request
+                .windows(4)
+                .position(|window| window == b"\r\n\r\n")
+                .expect("Node RPC HTTP body")
+                + 4;
+
+            let body: serde_json::Value = serde_json::from_slice(&request[body_start..]).unwrap();
+
+            assert_eq!(body["method"], "p2p_submit_transaction");
+            assert_eq!(body["params"]["options"]["trust_policy"], "Trusted");
+
+            let submitted_hex = body["params"]["tx"]
+                .as_str()
+                .expect("params.tx must be a string")
+                .to_owned();
+
+            assert!(!submitted_hex.is_empty());
+            hex::decode(&submitted_hex).expect("params.tx must contain valid hex");
+
+            tx_sender.send(submitted_hex).unwrap();
+
+            let response_body = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": body["id"].clone(),
+                "result": null
+            })
+            .to_string();
+
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response_body.len(),
+                response_body
+            )
+            .unwrap();
+
+            stream.flush().unwrap();
+        });
+
+        let mut activation = request_with_urls(vec![api_url]);
+        activation.node_conf = Some(MintlayerNodeClientConfig {
+            rpc_url: node_endpoint,
+            rpc_cookie_file: None,
+        });
+
+        let coin = MintlayerCoin::new(&test_ctx(), valid_conf(), activation, iguana_policy()).unwrap();
+
+        let sender = coin.address().to_owned();
+        let api_server = spawn_withdraw_mock_api(api_listener, sender);
+
+        let mut request = withdraw_request(WITHDRAW_RECIPIENT);
+        request.broadcast = true;
+
+        let details = MmCoin::withdraw(&coin, request).compat().await.unwrap();
+
+        api_server.join().unwrap();
+        node_server.join().unwrap();
+
+        let submitted_hex = tx_receiver
+            .recv_timeout(Duration::from_secs(5))
+            .expect("Node RPC did not receive the signed transaction");
+
+        let (returned_bytes, returned_txid) = match &details.tx {
+            TransactionData::Signed { tx_hex, tx_hash } => (tx_hex.0.clone(), tx_hash.clone()),
+            other => panic!("expected signed Mintlayer transaction, got {:?}", other),
+        };
+
+        assert_eq!(submitted_hex, hex::encode(&returned_bytes));
+
+        assert_eq!(
+            canonical_transaction_id_from_signed_bytes(&returned_bytes).unwrap(),
+            returned_txid
+        );
+
+        assert_eq!(details.to, vec![WITHDRAW_RECIPIENT.to_owned()]);
+
+        match details.fee_details.as_ref() {
+            Some(TxFeeDetails::Utxo(fee)) => {
+                assert_eq!(fee.coin.as_deref(), Some("ML"));
+            },
+            other => panic!("expected Mintlayer UTXO fee details, got {:?}", other),
+        }
+    }
+
     #[test]
     fn mmcoin_withdraw_rejects_unsupported_requests_before_network() {
         let coin = MintlayerCoin::new(
@@ -1274,11 +1410,6 @@ mod tests {
             iguana_policy(),
         )
         .unwrap();
-
-        let mut broadcast = withdraw_request(WITHDRAW_RECIPIENT);
-        broadcast.broadcast = true;
-        let broadcast_error = MmCoin::withdraw(&coin, broadcast).wait().unwrap_err();
-        assert!(format!("{broadcast_error:?}").contains("broadcast remains disabled"));
 
         let mut max = withdraw_request(WITHDRAW_RECIPIENT);
         max.max = true;
