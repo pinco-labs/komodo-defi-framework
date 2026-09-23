@@ -134,7 +134,7 @@ pub struct MintlayerCoinImpl {
     conf: MintlayerCoinConf,
     api_urls: Vec<Url>,
     api_client: MintlayerApiClient,
-    node_rpc_url: Option<String>,
+    node_conf: Option<MintlayerNodeClientConfig>,
     tx_history: bool,
     required_confirmations: AtomicU64,
     key_pair: KeyPair,
@@ -149,7 +149,7 @@ impl fmt::Debug for MintlayerCoinImpl {
             .debug_struct("MintlayerCoinImpl")
             .field("conf", &self.conf)
             .field("api_urls", &self.api_urls)
-            .field("node_rpc_url", &self.node_rpc_url)
+            .field("node_conf", &self.node_conf)
             .field("tx_history", &self.tx_history)
             .field(
                 "required_confirmations",
@@ -185,7 +185,7 @@ impl MintlayerCoin {
 
         let api_urls = validate_api_urls(&request.client_conf.api_urls)?;
         let api_client = MintlayerApiClient::new(api_urls.clone());
-        let node_rpc_url = request.node_conf.as_ref().map(validate_node_rpc_url).transpose()?;
+        let node_conf = request.node_conf.as_ref().map(validate_node_rpc_config).transpose()?;
 
         let required_confirmations = request.required_confirmations.unwrap_or(conf.required_confirmations);
 
@@ -203,7 +203,7 @@ impl MintlayerCoin {
             conf,
             api_urls,
             api_client,
-            node_rpc_url,
+            node_conf,
             tx_history: request.tx_history,
             required_confirmations: AtomicU64::new(required_confirmations),
             key_pair,
@@ -238,13 +238,32 @@ impl MintlayerCoin {
     }
 
     pub fn node_rpc_url(&self) -> Option<&str> {
-        self.node_rpc_url.as_deref()
+        self.node_conf.as_ref().map(|config| config.rpc_url.as_str())
     }
 
-    pub fn node_client(&self) -> Option<MintlayerNodeClient> {
-        self.node_rpc_url
-            .as_ref()
-            .map(|endpoint| MintlayerNodeClient::new(endpoint.clone()))
+    pub fn node_client(&self) -> Result<Option<MintlayerNodeClient>, String> {
+        let Some(config) = self.node_conf.as_ref() else {
+            return Ok(None);
+        };
+
+        let client = if let Some(cookie_file) = config.rpc_cookie_file.as_deref() {
+            let cookie = std::fs::read_to_string(cookie_file)
+                .map_err(|error| format!("Failed to read Mintlayer node RPC cookie file: {error}"))?;
+            let cookie = cookie.trim_end_matches(['\r', '\n']);
+            let (username, password) = cookie
+                .split_once(':')
+                .ok_or_else(|| "Invalid Mintlayer node RPC cookie format".to_owned())?;
+            if username.is_empty() || password.is_empty() {
+                return Err("Invalid Mintlayer node RPC cookie format".to_owned());
+            }
+            MintlayerNodeClient::builder(config.rpc_url.clone())
+                .basic_auth(username, password)
+                .build()
+                .map_err(|error| format!("Failed to build authenticated Mintlayer node RPC client: {error}"))?
+        } else {
+            MintlayerNodeClient::new(config.rpc_url.clone())
+        };
+        Ok(Some(client))
     }
 
     pub fn address(&self) -> &str {
@@ -407,7 +426,7 @@ fn mintlayer_withdraw_details(
 
 async fn broadcast_mintlayer_transaction_data(coin: &MintlayerCoin, tx: &TransactionData) -> Result<String, String> {
     let node_client = coin
-        .node_client()
+        .node_client()?
         .ok_or_else(|| "Mintlayer node RPC is not configured".to_owned())?;
     let tx_hex = tx
         .tx_hex()
@@ -580,12 +599,13 @@ impl MarketCoinOps for MintlayerCoin {
             Err(error) => return Box::new(futures01::future::err(error.to_string())),
         };
         let node_client = match self.node_client() {
-            Some(client) => client,
-            None => {
+            Ok(Some(client)) => client,
+            Ok(None) => {
                 return Box::new(futures01::future::err(
                     "Mintlayer node RPC is not configured".to_string(),
                 ));
             },
+            Err(error) => return Box::new(futures01::future::err(error)),
         };
         let tx_hex = hex::encode(tx);
         let future = async move {
@@ -980,7 +1000,9 @@ fn validate_api_genesis_block_id(expected: &str, actual: &str) -> Result<(), Min
     Ok(())
 }
 
-fn validate_node_rpc_url(config: &MintlayerNodeClientConfig) -> Result<String, MintlayerCoinBuildError> {
+fn validate_node_rpc_config(
+    config: &MintlayerNodeClientConfig,
+) -> Result<MintlayerNodeClientConfig, MintlayerCoinBuildError> {
     let url = Url::parse(&config.rpc_url).map_err(|_| MintlayerCoinBuildError::InvalidNodeRpcUrl)?;
 
     if url.username() != "" || url.password().is_some() {
@@ -1003,7 +1025,10 @@ fn validate_node_rpc_url(config: &MintlayerNodeClientConfig) -> Result<String, M
         return Err(MintlayerCoinBuildError::RemoteNodeRpcUrlNotAllowed);
     }
 
-    Ok(url.to_string().trim_end_matches('/').to_owned())
+    Ok(MintlayerNodeClientConfig {
+        rpc_url: url.to_string().trim_end_matches('/').to_owned(),
+        rpc_cookie_file: config.rpc_cookie_file.clone(),
+    })
 }
 
 fn validate_api_urls(configured_urls: &[String]) -> Result<Vec<Url>, MintlayerCoinBuildError> {
@@ -1377,7 +1402,10 @@ mod tests {
         });
 
         let mut request = request_with_urls(vec![concat!("https", "://api.example").into()]);
-        request.node_conf = Some(MintlayerNodeClientConfig { rpc_url: endpoint });
+        request.node_conf = Some(MintlayerNodeClientConfig {
+            rpc_url: endpoint,
+            rpc_cookie_file: None,
+        });
         let coin = MintlayerCoin::new(&test_ctx(), valid_conf(), request, iguana_policy()).unwrap();
 
         let returned_txid = coin.send_raw_tx_bytes(&signed_bytes).compat().await.unwrap();
@@ -1440,11 +1468,113 @@ mod tests {
         });
 
         let mut request = request_with_urls(vec![concat!("https", "://api.example").into()]);
-        request.node_conf = Some(MintlayerNodeClientConfig { rpc_url: endpoint });
+        request.node_conf = Some(MintlayerNodeClientConfig {
+            rpc_url: endpoint,
+            rpc_cookie_file: None,
+        });
         let coin = MintlayerCoin::new(&test_ctx(), valid_conf(), request, iguana_policy()).unwrap();
         let tx = TransactionData::new_signed(expected_bytes.into(), expected_txid.clone());
         let returned_txid = broadcast_mintlayer_transaction_data(&coin, &tx).await.unwrap();
         assert_eq!(returned_txid, expected_txid);
+        server.join().unwrap();
+    }
+
+    #[tokio::test]
+    async fn node_rpc_cookie_auth_is_reloaded_and_sent_on_wire() {
+        use std::fs;
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::thread;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        fn read_http_request(stream: &mut std::net::TcpStream) -> Vec<u8> {
+            let mut request = Vec::new();
+            let mut buffer = [0_u8; 4096];
+            loop {
+                let read = stream.read(&mut buffer).unwrap();
+                if read == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..read]);
+                if let Some(pos) = request.windows(4).position(|w| w == b"\r\n\r\n") {
+                    let end = pos + 4;
+                    let headers = String::from_utf8_lossy(&request[..end]);
+                    let len = headers
+                        .lines()
+                        .find_map(|line| {
+                            line.to_ascii_lowercase()
+                                .strip_prefix("content-length: ")
+                                .map(str::to_owned)
+                        })
+                        .and_then(|value| value.trim().parse::<usize>().ok())
+                        .unwrap_or(0);
+                    if request.len() >= end + len {
+                        break;
+                    }
+                }
+            }
+            request
+        }
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint = format!("http://{}", listener.local_addr().unwrap());
+
+        let server = thread::spawn(move || {
+            for expected_auth in [
+                "Basic Y29va2llLXVzZXI6Y29va2llLXBhc3M=",
+                "Basic cm90YXRlZC11c2VyOnJvdGF0ZWQtcGFzcw==",
+            ] {
+                let (mut stream, _) = listener.accept().unwrap();
+                let request = read_http_request(&mut stream);
+                let header_end = request.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
+                let headers = String::from_utf8_lossy(&request[..header_end]);
+
+                assert!(
+                    headers
+                        .lines()
+                        .any(|line| line.eq_ignore_ascii_case(&format!("authorization: {expected_auth}"))),
+                    "expected Authorization header was not sent"
+                );
+
+                let body: serde_json::Value = serde_json::from_slice(&request[header_end..]).unwrap();
+                assert_eq!(body["method"], "node_version");
+                let response =
+                    serde_json::json!({"jsonrpc":"2.0","id":body["id"].clone(),"result":"1.4.0"}).to_string();
+                write!(
+                    stream,
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    response.len(),
+                    response
+                )
+                .unwrap();
+            }
+        });
+
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let cookie_path = std::env::temp_dir().join(format!("kdf-ml-rpc-cookie-{}-{unique}", std::process::id()));
+        fs::write(&cookie_path, "cookie-user:cookie-pass").unwrap();
+
+        let mut request = request_with_urls(vec![concat!("https", "://api.example").into()]);
+        request.node_conf = Some(MintlayerNodeClientConfig {
+            rpc_url: endpoint,
+            rpc_cookie_file: Some(cookie_path.to_string_lossy().into_owned()),
+        });
+        let coin = MintlayerCoin::new(&test_ctx(), valid_conf(), request, iguana_policy()).unwrap();
+
+        let first_client = coin.node_client().unwrap().unwrap();
+        assert_eq!(first_client.node_version().await.unwrap(), "1.4.0");
+
+        fs::write(&cookie_path, "rotated-user:rotated-pass").unwrap();
+        let rotated_client = coin.node_client().unwrap().unwrap();
+        assert_eq!(rotated_client.node_version().await.unwrap(), "1.4.0");
+
+        fs::write(&cookie_path, "invalid-cookie").unwrap();
+        assert!(coin
+            .node_client()
+            .unwrap_err()
+            .contains("Invalid Mintlayer node RPC cookie format"));
+
+        fs::remove_file(cookie_path).unwrap();
         server.join().unwrap();
     }
 
@@ -1458,15 +1588,16 @@ mod tests {
         )
         .unwrap();
         assert_eq!(without_node.node_rpc_url(), None);
-        assert!(without_node.node_client().is_none());
+        assert!(without_node.node_client().unwrap().is_none());
 
         let mut with_node = request_with_urls(vec![concat!("https", "://api.example").into()]);
         with_node.node_conf = Some(MintlayerNodeClientConfig {
             rpc_url: "http://127.0.0.1:3030/".into(),
+            rpc_cookie_file: None,
         });
         let with_node = MintlayerCoin::new(&test_ctx(), valid_conf(), with_node, iguana_policy()).unwrap();
         assert_eq!(with_node.node_rpc_url(), Some("http://127.0.0.1:3030"));
-        assert!(with_node.node_client().is_some());
+        assert!(with_node.node_client().unwrap().is_some());
 
         for forbidden in [
             "https://127.0.0.1:3030",
@@ -1476,6 +1607,7 @@ mod tests {
             let mut request = request_with_urls(vec![concat!("https", "://api.example").into()]);
             request.node_conf = Some(MintlayerNodeClientConfig {
                 rpc_url: forbidden.into(),
+                rpc_cookie_file: None,
             });
             assert!(MintlayerCoin::new(&test_ctx(), valid_conf(), request, iguana_policy()).is_err());
         }

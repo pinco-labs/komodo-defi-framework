@@ -36,6 +36,8 @@ pub struct MintlayerApiClientConfig {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct MintlayerNodeClientConfig {
     pub rpc_url: String,
+    #[serde(default)]
+    pub rpc_cookie_file: Option<String>,
 }
 
 /// Parameters supplied when activating Mintlayer.
