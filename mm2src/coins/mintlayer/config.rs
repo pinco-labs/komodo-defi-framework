@@ -29,6 +29,15 @@ pub struct MintlayerApiClientConfig {
     pub api_urls: Vec<String>,
 }
 
+/// Optional Mintlayer node RPC configuration.
+///
+/// During the staged transaction integration this endpoint is deliberately
+/// restricted to loopback. Remote node submission remains disabled.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct MintlayerNodeClientConfig {
+    pub rpc_url: String,
+}
+
 /// Parameters supplied when activating Mintlayer.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct MintlayerActivationRequest {
@@ -36,6 +45,8 @@ pub struct MintlayerActivationRequest {
     pub tx_history: bool,
     pub required_confirmations: Option<u64>,
     pub client_conf: MintlayerApiClientConfig,
+    #[serde(default)]
+    pub node_conf: Option<MintlayerNodeClientConfig>,
 }
 
 /// Standalone protocol information used by the modern activation framework.

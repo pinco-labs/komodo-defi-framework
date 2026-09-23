@@ -16,7 +16,8 @@ pub use api_client::{MintlayerApiClient, MintlayerApiError, MintlayerEndpointErr
 pub use broadcast::{broadcast_signed_transaction_hex, MintlayerBroadcastError};
 pub use coin::{MintlayerCoin, MintlayerCoinBuildError, MintlayerNetworkValidationError, MINTLAYER_DECIMALS};
 pub use config::{
-    MintlayerActivationRequest, MintlayerApiClientConfig, MintlayerCoinConf, MintlayerNetwork, MintlayerProtocolInfo,
+    MintlayerActivationRequest, MintlayerApiClientConfig, MintlayerCoinConf, MintlayerNetwork,
+    MintlayerNodeClientConfig, MintlayerProtocolInfo,
 };
 pub use fee::{MintlayerFeeError, MintlayerFeeRate};
 pub use transaction::{

@@ -4,8 +4,8 @@ use crate::mintlayer::address::validate_mintlayer_address;
 use crate::mintlayer::{
     mintlayer_address_from_compressed_public_key, mintlayer_derivation_path, plan_signed_transaction_offline,
     sdk_private_key_from_kdf_key_pair, MintlayerActivationRequest, MintlayerAddressInfo, MintlayerApiClient,
-    MintlayerApiError, MintlayerChainTip, MintlayerCoinConf, MintlayerNetwork, MintlayerSignedTransactionPlan,
-    MintlayerUtxo,
+    MintlayerApiError, MintlayerChainTip, MintlayerCoinConf, MintlayerNetwork, MintlayerNodeClientConfig,
+    MintlayerSignedTransactionPlan, MintlayerUtxo,
 };
 use crate::utxo::UtxoFeeDetails;
 use crate::{
@@ -37,6 +37,7 @@ use futures::{FutureExt, TryFutureExt};
 use futures01::Future;
 use keys::KeyPair;
 use mintlayer_sdk::crypto::Network as SdkNetwork;
+use mintlayer_sdk::node::Client as MintlayerNodeClient;
 use mm2_core::mm_ctx::MmArc;
 use mm2_err_handle::prelude::*;
 use mm2_number::{BigDecimal, BigInt, MmNumber};
@@ -80,6 +81,10 @@ pub enum MintlayerCoinBuildError {
     DuplicateApiUrl {
         index: usize,
     },
+    InvalidNodeRpcUrl,
+    NodeRpcUrlCredentialsNotAllowed,
+    UnsupportedNodeRpcUrlScheme,
+    RemoteNodeRpcUrlNotAllowed,
     InvalidRequiredConfirmations,
     #[display(fmt = "Failed to derive Mintlayer key: {}", _0)]
     KeyDerivation(String),
@@ -128,6 +133,7 @@ pub struct MintlayerCoinImpl {
     conf: MintlayerCoinConf,
     api_urls: Vec<Url>,
     api_client: MintlayerApiClient,
+    node_rpc_url: Option<String>,
     tx_history: bool,
     required_confirmations: AtomicU64,
     key_pair: KeyPair,
@@ -142,6 +148,7 @@ impl fmt::Debug for MintlayerCoinImpl {
             .debug_struct("MintlayerCoinImpl")
             .field("conf", &self.conf)
             .field("api_urls", &self.api_urls)
+            .field("node_rpc_url", &self.node_rpc_url)
             .field("tx_history", &self.tx_history)
             .field(
                 "required_confirmations",
@@ -177,6 +184,7 @@ impl MintlayerCoin {
 
         let api_urls = validate_api_urls(&request.client_conf.api_urls)?;
         let api_client = MintlayerApiClient::new(api_urls.clone());
+        let node_rpc_url = request.node_conf.as_ref().map(validate_node_rpc_url).transpose()?;
 
         let required_confirmations = request.required_confirmations.unwrap_or(conf.required_confirmations);
 
@@ -194,6 +202,7 @@ impl MintlayerCoin {
             conf,
             api_urls,
             api_client,
+            node_rpc_url,
             tx_history: request.tx_history,
             required_confirmations: AtomicU64::new(required_confirmations),
             key_pair,
@@ -225,6 +234,16 @@ impl MintlayerCoin {
 
     pub fn api_client(&self) -> &MintlayerApiClient {
         &self.api_client
+    }
+
+    pub fn node_rpc_url(&self) -> Option<&str> {
+        self.node_rpc_url.as_deref()
+    }
+
+    pub fn node_client(&self) -> Option<MintlayerNodeClient> {
+        self.node_rpc_url
+            .as_ref()
+            .map(|endpoint| MintlayerNodeClient::new(endpoint.clone()))
     }
 
     pub fn address(&self) -> &str {
@@ -918,6 +937,32 @@ fn validate_api_genesis_block_id(expected: &str, actual: &str) -> Result<(), Min
     Ok(())
 }
 
+fn validate_node_rpc_url(config: &MintlayerNodeClientConfig) -> Result<String, MintlayerCoinBuildError> {
+    let url = Url::parse(&config.rpc_url).map_err(|_| MintlayerCoinBuildError::InvalidNodeRpcUrl)?;
+
+    if url.username() != "" || url.password().is_some() {
+        return Err(MintlayerCoinBuildError::NodeRpcUrlCredentialsNotAllowed);
+    }
+
+    if url.scheme() != "http" {
+        return Err(MintlayerCoinBuildError::UnsupportedNodeRpcUrlScheme);
+    }
+
+    let is_loopback = match url.host_str() {
+        Some("localhost") => true,
+        Some(host) => host
+            .parse::<std::net::IpAddr>()
+            .map(|ip| ip.is_loopback())
+            .unwrap_or(false),
+        None => false,
+    };
+    if !is_loopback {
+        return Err(MintlayerCoinBuildError::RemoteNodeRpcUrlNotAllowed);
+    }
+
+    Ok(url.to_string().trim_end_matches('/').to_owned())
+}
+
 fn validate_api_urls(configured_urls: &[String]) -> Result<Vec<Url>, MintlayerCoinBuildError> {
     if configured_urls.is_empty() {
         return Err(MintlayerCoinBuildError::MissingApiUrls);
@@ -1194,6 +1239,7 @@ mod tests {
             tx_history: false,
             required_confirmations: None,
             client_conf: MintlayerApiClientConfig { api_urls },
+            node_conf: None,
         }
     }
 
@@ -1203,6 +1249,39 @@ mod tests {
 
     fn test_ctx() -> MmArc {
         MmCtxBuilder::default().into_mm_arc()
+    }
+
+    #[test]
+    fn node_rpc_configuration_is_optional_and_loopback_only() {
+        let without_node = MintlayerCoin::new(
+            &test_ctx(),
+            valid_conf(),
+            request_with_urls(vec![concat!("https", "://api.example").into()]),
+            iguana_policy(),
+        )
+        .unwrap();
+        assert_eq!(without_node.node_rpc_url(), None);
+        assert!(without_node.node_client().is_none());
+
+        let mut with_node = request_with_urls(vec![concat!("https", "://api.example").into()]);
+        with_node.node_conf = Some(MintlayerNodeClientConfig {
+            rpc_url: "http://127.0.0.1:3030/".into(),
+        });
+        let with_node = MintlayerCoin::new(&test_ctx(), valid_conf(), with_node, iguana_policy()).unwrap();
+        assert_eq!(with_node.node_rpc_url(), Some("http://127.0.0.1:3030"));
+        assert!(with_node.node_client().is_some());
+
+        for forbidden in [
+            "https://127.0.0.1:3030",
+            "http://example.com:3030",
+            "http://user:pass@127.0.0.1:3030",
+        ] {
+            let mut request = request_with_urls(vec![concat!("https", "://api.example").into()]);
+            request.node_conf = Some(MintlayerNodeClientConfig {
+                rpc_url: forbidden.into(),
+            });
+            assert!(MintlayerCoin::new(&test_ctx(), valid_conf(), request, iguana_policy()).is_err());
+        }
     }
 
     #[test]
