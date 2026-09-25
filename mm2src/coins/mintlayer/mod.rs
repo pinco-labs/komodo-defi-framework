@@ -23,7 +23,7 @@ pub use config::{
 pub use fee::{MintlayerFeeError, MintlayerFeeRate};
 pub use transaction::{
     canonical_transaction_id_from_signed_bytes, plan_signed_transaction_offline, sdk_private_key_from_kdf_key_pair,
-    MintlayerSignedTransactionPlan, MintlayerTransactionPlanError,
+    MintlayerSignedTransactionPlan, MintlayerTransaction, MintlayerTransactionPlanError,
 };
 pub use types::{
     MintlayerAddressInfo, MintlayerAmount, MintlayerChainTip, MintlayerGenesisInfo, MintlayerOutPoint,

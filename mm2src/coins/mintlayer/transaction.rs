@@ -5,10 +5,17 @@ use crate::mintlayer::{
 use keys::KeyPair;
 use mintlayer_sdk::crypto::types::*;
 use mintlayer_sdk::crypto::{self, Amount, Network, SigHashType, SourceId, TxAdditionalInfo};
+use rpc::v1::types::Bytes as BytesJson;
 use std::convert::TryInto;
 use thiserror::Error;
 
 const MAX_FEE_ITERATIONS: usize = 8;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MintlayerTransaction {
+    pub signed_bytes: Vec<u8>,
+    pub transaction_id: String,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MintlayerSignedTransactionPlan {
@@ -366,6 +373,60 @@ mod tests {
     }
 
     #[test]
+    fn mintlayer_transaction_roundtrips_through_kdf_transaction_enum() {
+        use crate::{Transaction, TransactionEnum};
+
+        let network = Network::Mainnet;
+        let account_key = crypto::make_default_account_privkey(PUBLIC_TEST_MNEMONIC, network, None).unwrap();
+        let spend_key = crypto::make_receiving_address(&account_key, 0).unwrap();
+        let sender_address = address_for_key(&spend_key, network);
+        let recipient_key = crypto::make_receiving_address(&account_key, 1).unwrap();
+        let recipient_address = address_for_key(&recipient_key, network);
+
+        let utxos = vec![
+            coin_utxo("11".repeat(32), 0, 60_000_000_000, "0.6", &sender_address),
+            coin_utxo("22".repeat(32), 1, 40_000_000_000, "0.4", &sender_address),
+        ];
+
+        let plan = plan_signed_transaction_offline(
+            &utxos,
+            &sender_address,
+            &recipient_address,
+            50_000_000_000,
+            MintlayerFeeRate::from_atoms_per_kb(FEE_RATE_ATOMS_PER_KB),
+            &spend_key,
+            INCLUSION_HEIGHT,
+            network,
+        )
+        .unwrap();
+
+        let canonical_txid = canonical_transaction_id_from_signed_bytes(&plan.signed_bytes).unwrap();
+
+        assert_eq!(canonical_txid, plan.transaction_id);
+
+        let transaction = MintlayerTransaction {
+            signed_bytes: plan.signed_bytes.clone(),
+            transaction_id: plan.transaction_id.clone(),
+        };
+
+        assert_eq!(transaction.tx_hex(), plan.signed_bytes);
+        assert_eq!(
+            transaction.tx_hash_as_bytes(),
+            BytesJson::from(hex::decode(&canonical_txid).unwrap())
+        );
+
+        let transaction_enum: TransactionEnum = transaction.into();
+
+        assert!(matches!(transaction_enum, TransactionEnum::MintlayerTransaction(_)));
+
+        assert_eq!(transaction_enum.tx_hex(), plan.signed_bytes);
+        assert_eq!(
+            transaction_enum.tx_hash_as_bytes(),
+            BytesJson::from(hex::decode(&canonical_txid).unwrap())
+        );
+    }
+
+    #[test]
     fn plans_and_signs_canonical_transaction_without_submission() {
         let network = Network::Mainnet;
         let account_key = crypto::make_default_account_privkey(PUBLIC_TEST_MNEMONIC, network, None).unwrap();
@@ -498,5 +559,18 @@ mod tests {
             }
         }))
         .unwrap()
+    }
+}
+
+impl crate::Transaction for MintlayerTransaction {
+    fn tx_hex(&self) -> Vec<u8> {
+        self.signed_bytes.clone()
+    }
+
+    fn tx_hash_as_bytes(&self) -> BytesJson {
+        BytesJson::from(
+            hex::decode(&self.transaction_id)
+                .expect("Mintlayer transaction_id must contain canonical hexadecimal bytes"),
+        )
     }
 }

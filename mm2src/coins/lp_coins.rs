@@ -297,6 +297,7 @@ use utxo::utxo_standard::{utxo_standard_coin_with_policy, UtxoStandardCoin};
 use utxo::{swap_proto_v2_scripts, BlockchainNetwork, GenerateTxError, UtxoActivationParams, UtxoFeeDetails, UtxoTx};
 
 pub mod mintlayer;
+use mintlayer::MintlayerTransaction;
 pub mod nft;
 use nft::nft_errors::GetNftInfoError;
 use script::Script;
@@ -618,6 +619,7 @@ pub enum TransactionEnum {
     #[cfg(not(target_arch = "wasm32"))]
     LightningPayment(LightningPayment),
     SiaTransaction(SiaTransaction),
+    MintlayerTransaction(MintlayerTransaction),
 }
 
 ifrom!(TransactionEnum, UtxoTx);
@@ -626,6 +628,7 @@ ifrom!(TransactionEnum, ZTransaction);
 #[cfg(not(target_arch = "wasm32"))]
 ifrom!(TransactionEnum, LightningPayment);
 ifrom!(TransactionEnum, SiaTransaction);
+ifrom!(TransactionEnum, MintlayerTransaction);
 
 impl TransactionEnum {
     #[cfg(not(target_arch = "wasm32"))]
@@ -651,6 +654,7 @@ impl Deref for TransactionEnum {
             #[cfg(not(target_arch = "wasm32"))]
             TransactionEnum::LightningPayment(ref p) => p,
             TransactionEnum::SiaTransaction(ref t) => t,
+            TransactionEnum::MintlayerTransaction(ref t) => t,
         }
     }
 }
