@@ -4,6 +4,7 @@ pub mod broadcast;
 pub mod coin;
 pub mod config;
 pub mod fee;
+pub mod htlc;
 pub mod transaction;
 pub mod types;
 pub mod utxo;
