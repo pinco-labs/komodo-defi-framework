@@ -25,9 +25,9 @@ pub use htlc::{
     build_mintlayer_htlc_output, mintlayer_htlc_secret_hash_hex, mintlayer_htlc_until_time, MintlayerHtlcError,
 };
 pub use transaction::{
-    canonical_transaction_id_from_signed_bytes, plan_signed_output_offline, plan_signed_transaction_offline,
-    sdk_private_key_from_kdf_key_pair, MintlayerSignedTransactionPlan, MintlayerTransaction,
-    MintlayerTransactionPlanError,
+    canonical_transaction_id_from_signed_bytes, plan_signed_htlc_refund_offline, plan_signed_htlc_spend_offline,
+    plan_signed_output_offline, plan_signed_transaction_offline, sdk_private_key_from_kdf_key_pair,
+    MintlayerHtlcResolutionPlan, MintlayerSignedTransactionPlan, MintlayerTransaction, MintlayerTransactionPlanError,
 };
 pub use types::{
     MintlayerAddressInfo, MintlayerAmount, MintlayerChainTip, MintlayerGenesisInfo, MintlayerOutPoint,

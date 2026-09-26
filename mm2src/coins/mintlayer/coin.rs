@@ -3,10 +3,11 @@ use crate::hd_wallet::HDAddressSelector;
 use crate::mintlayer::address::validate_mintlayer_address;
 use crate::mintlayer::{
     broadcast_signed_transaction_hex, build_mintlayer_htlc_output, canonical_transaction_id_from_signed_bytes,
-    mintlayer_address_from_compressed_public_key, mintlayer_derivation_path, plan_signed_output_offline,
-    plan_signed_transaction_offline, sdk_private_key_from_kdf_key_pair, MintlayerActivationRequest,
-    MintlayerAddressInfo, MintlayerApiClient, MintlayerApiError, MintlayerChainTip, MintlayerCoinConf,
-    MintlayerNetwork, MintlayerNodeClientConfig, MintlayerSignedTransactionPlan, MintlayerTransaction, MintlayerUtxo,
+    mintlayer_address_from_compressed_public_key, mintlayer_derivation_path, plan_signed_htlc_refund_offline,
+    plan_signed_htlc_spend_offline, plan_signed_output_offline, plan_signed_transaction_offline,
+    sdk_private_key_from_kdf_key_pair, MintlayerActivationRequest, MintlayerAddressInfo, MintlayerApiClient,
+    MintlayerApiError, MintlayerChainTip, MintlayerCoinConf, MintlayerNetwork, MintlayerNodeClientConfig,
+    MintlayerSignedTransactionPlan, MintlayerTransaction, MintlayerUtxo,
 };
 use crate::utxo::UtxoFeeDetails;
 use crate::{
@@ -603,6 +604,119 @@ async fn send_mintlayer_swap_payment(coin: &MintlayerCoin, args: &SendPaymentArg
     Ok(transaction.into())
 }
 
+fn mintlayer_htlc_payment_outpoint(
+    payment_tx: &[u8],
+) -> Result<(String, mintlayer_sdk::crypto::types::TxOutput), String> {
+    let payment = mintlayer_sdk::crypto::decode_transaction_lenient(payment_tx).map_err(|error| error.to_string())?;
+
+    let payment_txid = canonical_transaction_id_from_signed_bytes(payment_tx).map_err(|error| error.to_string())?;
+
+    let htlc_output = payment
+        .outputs()
+        .first()
+        .cloned()
+        .ok_or_else(|| "Mintlayer swap payment has no outputs".to_string())?;
+
+    if !matches!(
+        htlc_output,
+        mintlayer_sdk::crypto::types::TxOutput::Htlc(mintlayer_sdk::crypto::types::OutputValue::Coin(_), _)
+    ) {
+        return Err("Mintlayer swap payment output 0 is not a native coin HTLC".to_string());
+    }
+
+    Ok((payment_txid, htlc_output))
+}
+
+async fn build_mintlayer_htlc_spend(
+    coin: &MintlayerCoin,
+    args: &SpendPaymentArgs<'_>,
+) -> Result<MintlayerTransaction, String> {
+    let (payment_txid, htlc_output) = mintlayer_htlc_payment_outpoint(args.other_payment_tx)?;
+
+    let fee_rate = coin.api_client().fee_rate().await.map_err(|error| error.to_string())?;
+
+    let chain_tip = coin.chain_tip().await.map_err(|error| error.to_string())?;
+
+    let network = mintlayer_sdk_network(coin.network());
+    let destination_address = coin.address().to_owned();
+
+    let sdk_private_key = sdk_private_key_from_kdf_key_pair(&coin.key_pair).map_err(|error| error.to_string())?;
+
+    let plan = plan_signed_htlc_spend_offline(
+        &payment_txid,
+        0,
+        &htlc_output,
+        &destination_address,
+        &sdk_private_key,
+        args.secret,
+        fee_rate,
+        chain_tip.block_height,
+        network,
+    )
+    .map_err(|error| error.to_string())?;
+
+    drop(sdk_private_key);
+
+    Ok(MintlayerTransaction {
+        signed_bytes: plan.signed_bytes,
+        transaction_id: plan.transaction_id,
+    })
+}
+
+async fn build_mintlayer_htlc_refund(
+    coin: &MintlayerCoin,
+    args: &RefundPaymentArgs<'_>,
+) -> Result<MintlayerTransaction, String> {
+    let (payment_txid, htlc_output) = mintlayer_htlc_payment_outpoint(args.payment_tx)?;
+
+    let fee_rate = coin.api_client().fee_rate().await.map_err(|error| error.to_string())?;
+
+    let chain_tip = coin.chain_tip().await.map_err(|error| error.to_string())?;
+
+    let network = mintlayer_sdk_network(coin.network());
+    let destination_address = coin.address().to_owned();
+
+    let htlc_key_pair = coin.derive_htlc_key_pair(args.swap_unique_data);
+
+    let sdk_private_key = sdk_private_key_from_kdf_key_pair(&htlc_key_pair).map_err(|error| error.to_string())?;
+
+    let plan = plan_signed_htlc_refund_offline(
+        &payment_txid,
+        0,
+        &htlc_output,
+        &destination_address,
+        &sdk_private_key,
+        fee_rate,
+        chain_tip.block_height,
+        network,
+    )
+    .map_err(|error| error.to_string())?;
+
+    drop(sdk_private_key);
+
+    Ok(MintlayerTransaction {
+        signed_bytes: plan.signed_bytes,
+        transaction_id: plan.transaction_id,
+    })
+}
+
+async fn send_mintlayer_htlc_resolution(coin: &MintlayerCoin, transaction: MintlayerTransaction) -> TransactionResult {
+    let broadcast_txid = coin
+        .send_raw_tx_bytes(&transaction.signed_bytes)
+        .compat()
+        .await
+        .map_err(TransactionErr::Plain)?;
+
+    if broadcast_txid != transaction.transaction_id {
+        return Err(TransactionErr::Plain(format!(
+            "Mintlayer broadcaster returned transaction ID '{}' but built transaction ID is '{}'",
+            broadcast_txid, transaction.transaction_id
+        )));
+    }
+
+    Ok(transaction.into())
+}
+
 #[async_trait]
 impl MarketCoinOps for MintlayerCoin {
     fn ticker(&self) -> &str {
@@ -761,28 +875,32 @@ impl SwapOps for MintlayerCoin {
         send_mintlayer_swap_payment(self, &args).await
     }
 
-    async fn send_maker_spends_taker_payment(&self, _args: SpendPaymentArgs<'_>) -> TransactionResult {
-        Err(TransactionErr::ProtocolNotSupported(
-            MINTLAYER_WALLET_ONLY_REASON.into(),
-        ))
+    async fn send_maker_spends_taker_payment(&self, args: SpendPaymentArgs<'_>) -> TransactionResult {
+        let transaction = build_mintlayer_htlc_spend(self, &args)
+            .await
+            .map_err(TransactionErr::Plain)?;
+        send_mintlayer_htlc_resolution(self, transaction).await
     }
 
-    async fn send_taker_spends_maker_payment(&self, _args: SpendPaymentArgs<'_>) -> TransactionResult {
-        Err(TransactionErr::ProtocolNotSupported(
-            MINTLAYER_WALLET_ONLY_REASON.into(),
-        ))
+    async fn send_taker_spends_maker_payment(&self, args: SpendPaymentArgs<'_>) -> TransactionResult {
+        let transaction = build_mintlayer_htlc_spend(self, &args)
+            .await
+            .map_err(TransactionErr::Plain)?;
+        send_mintlayer_htlc_resolution(self, transaction).await
     }
 
-    async fn send_taker_refunds_payment(&self, _args: RefundPaymentArgs<'_>) -> TransactionResult {
-        Err(TransactionErr::ProtocolNotSupported(
-            MINTLAYER_WALLET_ONLY_REASON.into(),
-        ))
+    async fn send_taker_refunds_payment(&self, args: RefundPaymentArgs<'_>) -> TransactionResult {
+        let transaction = build_mintlayer_htlc_refund(self, &args)
+            .await
+            .map_err(TransactionErr::Plain)?;
+        send_mintlayer_htlc_resolution(self, transaction).await
     }
 
-    async fn send_maker_refunds_payment(&self, _args: RefundPaymentArgs<'_>) -> TransactionResult {
-        Err(TransactionErr::ProtocolNotSupported(
-            MINTLAYER_WALLET_ONLY_REASON.into(),
-        ))
+    async fn send_maker_refunds_payment(&self, args: RefundPaymentArgs<'_>) -> TransactionResult {
+        let transaction = build_mintlayer_htlc_refund(self, &args)
+            .await
+            .map_err(TransactionErr::Plain)?;
+        send_mintlayer_htlc_resolution(self, transaction).await
     }
 
     async fn validate_fee(&self, _args: ValidateFeeArgs<'_>) -> ValidatePaymentResult<()> {
@@ -1292,6 +1410,60 @@ mod tests {
             }
 
             assert_eq!(requested_paths.len(), 3, "mock API did not receive all requests");
+            requested_paths
+        })
+    }
+
+    fn spawn_resolution_mock_api(listener: TcpListener) -> thread::JoinHandle<Vec<String>> {
+        thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            let mut requested_paths = Vec::new();
+
+            while requested_paths.len() < 2 && Instant::now() < deadline {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        let path = read_request_path(&mut stream);
+
+                        let body = match path.as_str() {
+                            "/api/v2/feerate" => {
+                                format!("\"{WITHDRAW_FEE_RATE_ATOMS_PER_KB}\"")
+                            },
+                            "/api/v2/chain/tip" => json!({
+                                "block_height": 700000,
+                                "block_id": "22".repeat(32)
+                            })
+                            .to_string(),
+                            other => panic!("unexpected resolution mock API request: {}", other),
+                        };
+
+                        respond_json(&mut stream, &body);
+                        requested_paths.push(path);
+                    },
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(10));
+                    },
+                    Err(error) => {
+                        panic!("resolution mock API accept failed: {}", error)
+                    },
+                }
+            }
+
+            assert_eq!(
+                requested_paths.len(),
+                2,
+                "resolution mock API did not receive all requests"
+            );
+
+            assert!(
+                requested_paths.iter().any(|path| path == "/api/v2/feerate"),
+                "resolution mock API did not receive fee-rate request"
+            );
+
+            assert!(
+                requested_paths.iter().any(|path| path == "/api/v2/chain/tip"),
+                "resolution mock API did not receive chain-tip request"
+            );
+
             requested_paths
         })
     }
@@ -1922,6 +2094,308 @@ mod tests {
         .unwrap();
 
         assert_eq!(decoded.outputs().first(), Some(&expected_output));
+    }
+
+    fn bind_transaction_capture_rpc() -> (TcpListener, String) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let endpoint = format!("http://{}", listener.local_addr().unwrap());
+        (listener, endpoint)
+    }
+
+    fn spawn_transaction_capture_rpc(listener: TcpListener) -> thread::JoinHandle<Vec<u8>> {
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0_u8; 4096];
+
+            loop {
+                let read = stream.read(&mut buffer).unwrap();
+                if read == 0 {
+                    break;
+                }
+
+                request.extend_from_slice(&buffer[..read]);
+
+                if let Some(pos) = request.windows(4).position(|w| w == b"\r\n\r\n") {
+                    let end = pos + 4;
+                    let headers = String::from_utf8_lossy(&request[..end]);
+
+                    let len = headers
+                        .lines()
+                        .find_map(|line| {
+                            line.to_ascii_lowercase()
+                                .strip_prefix("content-length: ")
+                                .map(str::to_owned)
+                        })
+                        .and_then(|value| value.trim().parse::<usize>().ok())
+                        .unwrap_or(0);
+
+                    if request.len() >= end + len {
+                        break;
+                    }
+                }
+            }
+
+            let body_start = request.windows(4).position(|w| w == b"\r\n\r\n").unwrap() + 4;
+
+            let body: serde_json::Value = serde_json::from_slice(&request[body_start..]).unwrap();
+
+            assert_eq!(body["method"], "p2p_submit_transaction");
+            assert_eq!(body["params"]["options"]["trust_policy"], "Trusted");
+
+            let tx_hex = body["params"]["tx"]
+                .as_str()
+                .expect("Mintlayer RPC tx must be hexadecimal");
+
+            let tx_bytes = hex::decode(tx_hex).unwrap();
+
+            let response_body = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": body["id"].clone(),
+                "result": null
+            })
+            .to_string();
+
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response_body.len(),
+                response_body
+            )
+            .unwrap();
+
+            tx_bytes
+        })
+    }
+
+    #[tokio::test]
+    async fn htlc_spend_swapops_builds_broadcasts_and_reveals_secret() {
+        use mintlayer_sdk::crypto::types::HtlcSecret;
+        use mintlayer_sdk::crypto::SourceId;
+        use mintlayer_sdk::prelude::DecodeAll;
+
+        const SECRET: [u8; 32] = [
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11,
+            0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+        ];
+        const TIME_LOCK: u64 = 1_800_010_000;
+
+        let secret_hash = mintlayer_sdk::crypto::types::HtlcSecret::new(SECRET).hash();
+
+        let (api_listener, api_url) = bind_withdraw_mock_api();
+        let (rpc_listener, rpc_endpoint) = bind_transaction_capture_rpc();
+
+        let mut request = request_with_urls(vec![api_url]);
+        request.node_conf = Some(MintlayerNodeClientConfig {
+            rpc_url: rpc_endpoint,
+            rpc_cookie_file: None,
+        });
+
+        let coin = MintlayerCoin::new(&test_ctx(), valid_conf(), request, iguana_policy()).unwrap();
+
+        let sender = coin.address().to_owned();
+        let api_server = spawn_withdraw_mock_api(api_listener, sender);
+
+        let other_secret = [2_u8; 32];
+        let other_key_pair = key_pair_from_secret(&other_secret.into()).unwrap();
+        let other_pubkey = other_key_pair.public_slice().to_vec();
+
+        let swap_contract_address = None;
+        let payment_instructions = None;
+        let amount: BigDecimal = "0.5".parse().unwrap();
+        let swap_unique_data = b"mintlayer-vc3-spend";
+
+        let payment_args = SendPaymentArgs {
+            time_lock_duration: 3600,
+            time_lock: TIME_LOCK,
+            other_pubkey: coin.public_key(),
+            secret_hash: secret_hash.as_bytes(),
+            amount,
+            swap_contract_address: &swap_contract_address,
+            swap_unique_data,
+            payment_instructions: &payment_instructions,
+            watcher_reward: None,
+            wait_for_confirmation_until: 0,
+        };
+
+        let payment = build_mintlayer_swap_payment(&coin, &payment_args).await.unwrap();
+
+        api_server.join().unwrap();
+
+        let (resolution_api_listener, resolution_api_url) = bind_withdraw_mock_api();
+
+        let mut resolution_request = request_with_urls(vec![resolution_api_url]);
+
+        resolution_request.node_conf = Some(MintlayerNodeClientConfig {
+            rpc_url: coin.node_rpc_url().expect("Mintlayer test node RPC URL").to_string(),
+            rpc_cookie_file: None,
+        });
+
+        let spend_coin = MintlayerCoin::new(&test_ctx(), valid_conf(), resolution_request, iguana_policy()).unwrap();
+
+        let resolution_api_server = spawn_resolution_mock_api(resolution_api_listener);
+
+        let rpc_server = spawn_transaction_capture_rpc(rpc_listener);
+
+        let spend_args = SpendPaymentArgs {
+            other_payment_tx: &payment.signed_bytes,
+            time_lock: TIME_LOCK,
+            other_pubkey: &other_pubkey,
+            secret: &SECRET,
+            secret_hash: secret_hash.as_bytes(),
+            swap_contract_address: &None,
+            swap_unique_data,
+            watcher_reward: false,
+        };
+
+        let result = SwapOps::send_maker_spends_taker_payment(&spend_coin, spend_args)
+            .await
+            .unwrap();
+
+        resolution_api_server.join().unwrap();
+        let submitted_bytes = rpc_server.join().unwrap();
+
+        let transaction = match result {
+            TransactionEnum::MintlayerTransaction(transaction) => transaction,
+            other => panic!("expected Mintlayer HTLC spend transaction, got {:?}", other),
+        };
+
+        assert_eq!(transaction.signed_bytes, submitted_bytes);
+
+        assert_eq!(
+            canonical_transaction_id_from_signed_bytes(&transaction.signed_bytes).unwrap(),
+            transaction.transaction_id
+        );
+
+        let signed =
+            mintlayer_sdk::crypto::types::SignedTransaction::decode_all(&mut &transaction.signed_bytes[..]).unwrap();
+
+        let payment_txid = canonical_transaction_id_from_signed_bytes(&payment.signed_bytes).unwrap();
+
+        let source_id = mintlayer_sdk::crypto::encode_outpoint_source_id(
+            mintlayer_sdk::crypto::types::H256::from_slice(&hex::decode(payment_txid).unwrap()),
+            SourceId::Transaction,
+        );
+
+        let extracted = mintlayer_sdk::crypto::extract_htlc_secret(&signed, source_id, 0).unwrap();
+
+        assert_eq!(extracted, HtlcSecret::new(SECRET));
+    }
+
+    #[tokio::test]
+    async fn htlc_refund_swapops_builds_broadcasts_without_revealing_secret() {
+        use crate::SwapTxTypeWithSecretHash;
+        use mintlayer_sdk::crypto::SourceId;
+        use mintlayer_sdk::prelude::DecodeAll;
+
+        const SECRET: [u8; 32] = [0x55; 32];
+        const TIME_LOCK: u64 = 1_800_020_000;
+
+        let secret_hash = mintlayer_sdk::crypto::types::HtlcSecret::new(SECRET).hash();
+
+        let (api_listener, api_url) = bind_withdraw_mock_api();
+        let (rpc_listener, rpc_endpoint) = bind_transaction_capture_rpc();
+
+        let mut request = request_with_urls(vec![api_url]);
+        request.node_conf = Some(MintlayerNodeClientConfig {
+            rpc_url: rpc_endpoint,
+            rpc_cookie_file: None,
+        });
+
+        let coin = MintlayerCoin::new(&test_ctx(), valid_conf(), request, iguana_policy()).unwrap();
+
+        let sender = coin.address().to_owned();
+        let api_server = spawn_withdraw_mock_api(api_listener, sender);
+
+        let other_secret = [3_u8; 32];
+        let other_key_pair = key_pair_from_secret(&other_secret.into()).unwrap();
+        let other_pubkey = other_key_pair.public_slice().to_vec();
+
+        let swap_contract_address = None;
+        let payment_instructions = None;
+        let amount: BigDecimal = "0.5".parse().unwrap();
+        let swap_unique_data = b"mintlayer-vc3-refund";
+
+        let payment_args = SendPaymentArgs {
+            time_lock_duration: 3600,
+            time_lock: TIME_LOCK,
+            other_pubkey: &other_pubkey,
+            secret_hash: secret_hash.as_bytes(),
+            amount,
+            swap_contract_address: &swap_contract_address,
+            swap_unique_data,
+            payment_instructions: &payment_instructions,
+            watcher_reward: None,
+            wait_for_confirmation_until: 0,
+        };
+
+        let payment = build_mintlayer_swap_payment(&coin, &payment_args).await.unwrap();
+
+        api_server.join().unwrap();
+
+        let (resolution_api_listener, resolution_api_url) = bind_withdraw_mock_api();
+
+        let mut resolution_request = request_with_urls(vec![resolution_api_url]);
+
+        resolution_request.node_conf = Some(MintlayerNodeClientConfig {
+            rpc_url: coin.node_rpc_url().expect("Mintlayer test node RPC URL").to_string(),
+            rpc_cookie_file: None,
+        });
+
+        let refund_coin = MintlayerCoin::new(&test_ctx(), valid_conf(), resolution_request, iguana_policy()).unwrap();
+
+        let resolution_api_server = spawn_resolution_mock_api(resolution_api_listener);
+
+        let rpc_server = spawn_transaction_capture_rpc(rpc_listener);
+
+        let refund_args = RefundPaymentArgs {
+            payment_tx: &payment.signed_bytes,
+            time_lock: TIME_LOCK,
+            other_pubkey: &other_pubkey,
+            tx_type_with_secret_hash: SwapTxTypeWithSecretHash::TakerOrMakerPayment {
+                maker_secret_hash: secret_hash.as_bytes(),
+            },
+            swap_contract_address: &None,
+            swap_unique_data,
+            watcher_reward: false,
+        };
+
+        let result = SwapOps::send_maker_refunds_payment(&refund_coin, refund_args)
+            .await
+            .unwrap();
+
+        resolution_api_server.join().unwrap();
+        let submitted_bytes = rpc_server.join().unwrap();
+
+        let transaction = match result {
+            TransactionEnum::MintlayerTransaction(transaction) => transaction,
+            other => panic!("expected Mintlayer HTLC refund transaction, got {:?}", other),
+        };
+
+        assert_eq!(transaction.signed_bytes, submitted_bytes);
+
+        assert_eq!(
+            canonical_transaction_id_from_signed_bytes(&transaction.signed_bytes).unwrap(),
+            transaction.transaction_id
+        );
+
+        let signed =
+            mintlayer_sdk::crypto::types::SignedTransaction::decode_all(&mut &transaction.signed_bytes[..]).unwrap();
+
+        let payment_txid = canonical_transaction_id_from_signed_bytes(&payment.signed_bytes).unwrap();
+
+        let source_id = mintlayer_sdk::crypto::encode_outpoint_source_id(
+            mintlayer_sdk::crypto::types::H256::from_slice(&hex::decode(payment_txid).unwrap()),
+            SourceId::Transaction,
+        );
+
+        let extracted = mintlayer_sdk::crypto::extract_htlc_secret(&signed, source_id, 0);
+
+        assert!(
+            matches!(extracted, Err(mintlayer_sdk::crypto::Error::UnexpectedHtlcSpendType)),
+            "refund must not reveal an HTLC secret: {:?}",
+            extracted
+        );
     }
 
     #[tokio::test]

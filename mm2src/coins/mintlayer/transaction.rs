@@ -18,6 +18,17 @@ pub struct MintlayerTransaction {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MintlayerHtlcResolutionPlan {
+    pub transaction_id: String,
+    pub signed_bytes: Vec<u8>,
+    pub input_atoms: u128,
+    pub output_atoms: u128,
+    pub fee_atoms: u128,
+    pub serialized_bytes: usize,
+    pub iterations: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MintlayerSignedTransactionPlan {
     pub transaction_id: String,
     pub signed_bytes: Vec<u8>,
@@ -57,6 +68,12 @@ pub enum MintlayerTransactionPlanError {
     AmountConservation,
     #[error("Failed to bridge the KDF signing key to the Mintlayer SDK: {0}")]
     KdfKeyBridge(String),
+    #[error("Mintlayer HTLC resolution requires a coin HTLC output")]
+    InvalidHtlcOutput,
+    #[error("Mintlayer HTLC amount cannot cover the canonical transaction fee")]
+    HtlcAmountBelowFee,
+    #[error("Mintlayer HTLC secret must contain exactly 32 bytes, found {0}")]
+    InvalidHtlcSecretLength(usize),
 }
 
 const SECP256K1_SCHNORR_SCALE_TAG: u8 = 0;
@@ -93,6 +110,180 @@ pub fn sdk_private_key_from_kdf_key_pair(key_pair: &KeyPair) -> Result<PrivateKe
     kdf_secret.fill(0);
     tagged_secret.fill(0);
     decoded
+}
+
+#[derive(Clone, Copy)]
+enum MintlayerHtlcResolution<'a> {
+    Spend(&'a [u8]),
+    Refund,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn plan_signed_htlc_spend_offline(
+    payment_transaction_id: &str,
+    htlc_output_index: u32,
+    htlc_output: &TxOutput,
+    destination_address: &str,
+    spend_key: &PrivateKey,
+    secret: &[u8],
+    fee_rate: MintlayerFeeRate,
+    inclusion_height: u64,
+    network: Network,
+) -> Result<MintlayerHtlcResolutionPlan, MintlayerTransactionPlanError> {
+    if secret.len() != 32 {
+        return Err(MintlayerTransactionPlanError::InvalidHtlcSecretLength(secret.len()));
+    }
+
+    plan_signed_htlc_resolution_offline(
+        payment_transaction_id,
+        htlc_output_index,
+        htlc_output,
+        destination_address,
+        spend_key,
+        MintlayerHtlcResolution::Spend(secret),
+        fee_rate,
+        inclusion_height,
+        network,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn plan_signed_htlc_refund_offline(
+    payment_transaction_id: &str,
+    htlc_output_index: u32,
+    htlc_output: &TxOutput,
+    destination_address: &str,
+    refund_key: &PrivateKey,
+    fee_rate: MintlayerFeeRate,
+    inclusion_height: u64,
+    network: Network,
+) -> Result<MintlayerHtlcResolutionPlan, MintlayerTransactionPlanError> {
+    plan_signed_htlc_resolution_offline(
+        payment_transaction_id,
+        htlc_output_index,
+        htlc_output,
+        destination_address,
+        refund_key,
+        MintlayerHtlcResolution::Refund,
+        fee_rate,
+        inclusion_height,
+        network,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn plan_signed_htlc_resolution_offline(
+    payment_transaction_id: &str,
+    htlc_output_index: u32,
+    htlc_output: &TxOutput,
+    destination_address: &str,
+    signing_key: &PrivateKey,
+    resolution: MintlayerHtlcResolution<'_>,
+    fee_rate: MintlayerFeeRate,
+    inclusion_height: u64,
+    network: Network,
+) -> Result<MintlayerHtlcResolutionPlan, MintlayerTransactionPlanError> {
+    let input_atoms = match htlc_output {
+        TxOutput::Htlc(OutputValue::Coin(amount), _) => amount.into_atoms(),
+        _ => return Err(MintlayerTransactionPlanError::InvalidHtlcOutput),
+    };
+
+    crypto::encode_destination(destination_address, network).map_err(sdk_error)?;
+
+    let signer_address =
+        crypto::pubkey_to_pubkeyhash_address(&crypto::public_key_from_private_key(signing_key), network);
+
+    if signer_address != destination_address {
+        return Err(MintlayerTransactionPlanError::SenderKeyMismatch);
+    }
+
+    let source_id_bytes = decode_source_id(payment_transaction_id)?;
+    let source_id = crypto::encode_outpoint_source_id(H256::from_slice(&source_id_bytes), SourceId::Transaction);
+
+    let mut fee_guess_atoms = 0_u128;
+    let mut previous_non_final_state = None;
+
+    for iteration in 1..=MAX_FEE_ITERATIONS {
+        let output_atoms = input_atoms
+            .checked_sub(fee_guess_atoms)
+            .ok_or(MintlayerTransactionPlanError::HtlcAmountBelowFee)?;
+
+        if output_atoms == 0 {
+            return Err(MintlayerTransactionPlanError::HtlcAmountBelowFee);
+        }
+
+        let input = crypto::encode_input_for_utxo(source_id.clone(), htlc_output_index);
+
+        let output = crypto::encode_output_transfer(Amount::from_atoms(output_atoms), destination_address, network)
+            .map_err(sdk_error)?;
+
+        let transaction = crypto::encode_transaction(vec![input], vec![output], 0).map_err(sdk_error)?;
+        let transaction_id = crypto::transaction_id(&transaction);
+
+        let input_utxos = [Some(htlc_output.clone())];
+
+        let witness = match resolution {
+            MintlayerHtlcResolution::Spend(secret) => {
+                let secret: [u8; 32] = secret
+                    .try_into()
+                    .map_err(|_| MintlayerTransactionPlanError::InvalidHtlcSecretLength(secret.len()))?;
+
+                crypto::encode_witness_htlc_spend(
+                    SigHashType::all(),
+                    signing_key,
+                    destination_address,
+                    &transaction,
+                    &input_utxos,
+                    0,
+                    HtlcSecret::new(secret),
+                    &TxAdditionalInfo::new(),
+                    inclusion_height,
+                    network,
+                )
+                .map_err(sdk_error)?
+            },
+            MintlayerHtlcResolution::Refund => crypto::encode_witness_htlc_refund_single_sig(
+                SigHashType::all(),
+                signing_key,
+                destination_address,
+                &transaction,
+                &input_utxos,
+                0,
+                &TxAdditionalInfo::new(),
+                inclusion_height,
+                network,
+            )
+            .map_err(sdk_error)?,
+        };
+
+        let signed = crypto::encode_signed_transaction(transaction, vec![witness]).map_err(sdk_error)?;
+
+        let signed_bytes = signed.encode();
+        let canonical_fee_atoms = fee_rate.compute_fee_atoms(signed_bytes.len())?;
+
+        if canonical_fee_atoms == fee_guess_atoms {
+            return Ok(MintlayerHtlcResolutionPlan {
+                transaction_id,
+                serialized_bytes: signed_bytes.len(),
+                signed_bytes,
+                input_atoms,
+                output_atoms,
+                fee_atoms: canonical_fee_atoms,
+                iterations: iteration,
+            });
+        }
+
+        let state = (signed_bytes.len(), canonical_fee_atoms);
+
+        if previous_non_final_state == Some(state) {
+            return Err(MintlayerTransactionPlanError::FeeConvergenceCycle);
+        }
+
+        previous_non_final_state = Some(state);
+        fee_guess_atoms = canonical_fee_atoms;
+    }
+
+    Err(MintlayerTransactionPlanError::FeeDidNotConverge(MAX_FEE_ITERATIONS))
 }
 
 /// Builds and signs a native Mintlayer transfer entirely in memory.
@@ -444,6 +635,283 @@ mod tests {
         assert_eq!(
             transaction_enum.tx_hash_as_bytes(),
             BytesJson::from(hex::decode(&canonical_txid).unwrap())
+        );
+    }
+
+    #[test]
+    fn plans_signed_htlc_spend_with_canonical_fee_and_extractable_secret() {
+        use crate::mintlayer::build_mintlayer_htlc_output;
+
+        const PAYMENT_TXID: &str = "1111111111111111111111111111111111111111111111111111111111111111";
+        const HTLC_ATOMS: u128 = 100_000_000_000;
+        const TIME_LOCK: u64 = 1_800_000_000;
+        const SECRET_BYTES: [u8; 32] = [
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11,
+            0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+        ];
+
+        let network = Network::Mainnet;
+        let account_key = crypto::make_default_account_privkey(PUBLIC_TEST_MNEMONIC, network, None).unwrap();
+
+        let spend_key = crypto::make_receiving_address(&account_key, 0).unwrap();
+        let spend_address = address_for_key(&spend_key, network);
+
+        let refund_key = crypto::make_receiving_address(&account_key, 1).unwrap();
+        let refund_address = address_for_key(&refund_key, network);
+
+        let secret = HtlcSecret::new(SECRET_BYTES);
+        let secret_hash = secret.hash();
+
+        let htlc_output = build_mintlayer_htlc_output(
+            HTLC_ATOMS,
+            secret_hash.as_bytes(),
+            &spend_address,
+            &refund_address,
+            TIME_LOCK,
+            network,
+        )
+        .unwrap();
+
+        let fee_rate = MintlayerFeeRate::from_atoms_per_kb(FEE_RATE_ATOMS_PER_KB);
+
+        let plan = plan_signed_htlc_spend_offline(
+            PAYMENT_TXID,
+            0,
+            &htlc_output,
+            &spend_address,
+            &spend_key,
+            &SECRET_BYTES,
+            fee_rate,
+            INCLUSION_HEIGHT,
+            network,
+        )
+        .unwrap();
+
+        assert_eq!(plan.input_atoms, HTLC_ATOMS);
+        assert_eq!(plan.output_atoms + plan.fee_atoms, plan.input_atoms);
+        assert_eq!(
+            fee_rate.compute_fee_atoms(plan.serialized_bytes).unwrap(),
+            plan.fee_atoms
+        );
+        assert!(plan.iterations >= 2);
+
+        assert_eq!(
+            canonical_transaction_id_from_signed_bytes(&plan.signed_bytes).unwrap(),
+            plan.transaction_id
+        );
+
+        let decoded = crypto::decode_transaction_lenient(&plan.signed_bytes).unwrap();
+
+        assert_eq!(decoded.outputs().len(), 1);
+
+        match &decoded.outputs()[0] {
+            TxOutput::Transfer(OutputValue::Coin(amount), destination) => {
+                assert_eq!(amount.into_atoms(), plan.output_atoms);
+                assert_eq!(
+                    destination,
+                    &crypto::encode_destination(&spend_address, network).unwrap()
+                );
+            },
+            other => panic!(
+                "expected HTLC spend to produce one coin transfer output, got {:?}",
+                other
+            ),
+        }
+
+        let signed = SignedTransaction::decode_all(&mut &plan.signed_bytes[..]).unwrap();
+
+        let source_id = crypto::encode_outpoint_source_id(
+            H256::from_slice(&hex::decode(PAYMENT_TXID).unwrap()),
+            SourceId::Transaction,
+        );
+
+        let extracted = crypto::extract_htlc_secret(&signed, source_id, 0).unwrap();
+
+        assert_eq!(extracted, HtlcSecret::new(SECRET_BYTES));
+        assert_eq!(extracted.encode(), SECRET_BYTES.to_vec());
+    }
+
+    #[test]
+    fn plans_signed_htlc_refund_with_canonical_fee_without_revealing_secret() {
+        use crate::mintlayer::build_mintlayer_htlc_output;
+
+        const PAYMENT_TXID: &str = "2222222222222222222222222222222222222222222222222222222222222222";
+        const HTLC_ATOMS: u128 = 100_000_000_000;
+        const TIME_LOCK: u64 = 1_800_000_000;
+        const SECRET_BYTES: [u8; 32] = [
+            0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f, 0x30, 0x31,
+            0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+        ];
+
+        let network = Network::Mainnet;
+        let account_key = crypto::make_default_account_privkey(PUBLIC_TEST_MNEMONIC, network, None).unwrap();
+
+        let spend_key = crypto::make_receiving_address(&account_key, 0).unwrap();
+        let spend_address = address_for_key(&spend_key, network);
+
+        let refund_key = crypto::make_receiving_address(&account_key, 1).unwrap();
+        let refund_address = address_for_key(&refund_key, network);
+
+        let secret = HtlcSecret::new(SECRET_BYTES);
+        let secret_hash = secret.hash();
+
+        let htlc_output = build_mintlayer_htlc_output(
+            HTLC_ATOMS,
+            secret_hash.as_bytes(),
+            &spend_address,
+            &refund_address,
+            TIME_LOCK,
+            network,
+        )
+        .unwrap();
+
+        let fee_rate = MintlayerFeeRate::from_atoms_per_kb(FEE_RATE_ATOMS_PER_KB);
+
+        let plan = plan_signed_htlc_refund_offline(
+            PAYMENT_TXID,
+            0,
+            &htlc_output,
+            &refund_address,
+            &refund_key,
+            fee_rate,
+            INCLUSION_HEIGHT,
+            network,
+        )
+        .unwrap();
+
+        assert_eq!(plan.input_atoms, HTLC_ATOMS);
+        assert_eq!(plan.output_atoms + plan.fee_atoms, plan.input_atoms);
+        assert_eq!(
+            fee_rate.compute_fee_atoms(plan.serialized_bytes).unwrap(),
+            plan.fee_atoms
+        );
+        assert!(plan.iterations >= 2);
+
+        assert_eq!(
+            canonical_transaction_id_from_signed_bytes(&plan.signed_bytes).unwrap(),
+            plan.transaction_id
+        );
+
+        let decoded = crypto::decode_transaction_lenient(&plan.signed_bytes).unwrap();
+
+        match &decoded.outputs()[0] {
+            TxOutput::Transfer(OutputValue::Coin(amount), destination) => {
+                assert_eq!(amount.into_atoms(), plan.output_atoms);
+                assert_eq!(
+                    destination,
+                    &crypto::encode_destination(&refund_address, network).unwrap()
+                );
+            },
+            other => panic!(
+                "expected HTLC refund to produce one coin transfer output, got {:?}",
+                other
+            ),
+        }
+
+        let signed = SignedTransaction::decode_all(&mut &plan.signed_bytes[..]).unwrap();
+
+        let source_id = crypto::encode_outpoint_source_id(
+            H256::from_slice(&hex::decode(PAYMENT_TXID).unwrap()),
+            SourceId::Transaction,
+        );
+
+        let result = crypto::extract_htlc_secret(&signed, source_id, 0);
+
+        assert!(
+            matches!(result, Err(crypto::Error::UnexpectedHtlcSpendType)),
+            "refund must not expose an HTLC secret, got {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_htlc_resolution_inputs() {
+        use crate::mintlayer::build_mintlayer_htlc_output;
+
+        const PAYMENT_TXID: &str = "3333333333333333333333333333333333333333333333333333333333333333";
+        const TIME_LOCK: u64 = 1_800_000_000;
+        const SECRET_BYTES: [u8; 32] = [0x55; 32];
+
+        let network = Network::Mainnet;
+        let account_key = crypto::make_default_account_privkey(PUBLIC_TEST_MNEMONIC, network, None).unwrap();
+
+        let spend_key = crypto::make_receiving_address(&account_key, 0).unwrap();
+        let spend_address = address_for_key(&spend_key, network);
+
+        let refund_key = crypto::make_receiving_address(&account_key, 1).unwrap();
+        let refund_address = address_for_key(&refund_key, network);
+
+        let secret = HtlcSecret::new(SECRET_BYTES);
+        let secret_hash = secret.hash();
+
+        let fee_rate = MintlayerFeeRate::from_atoms_per_kb(FEE_RATE_ATOMS_PER_KB);
+
+        let normal_output =
+            crypto::encode_output_transfer(Amount::from_atoms(100_000_000_000), &spend_address, network).unwrap();
+
+        assert_eq!(
+            plan_signed_htlc_spend_offline(
+                PAYMENT_TXID,
+                0,
+                &normal_output,
+                &spend_address,
+                &spend_key,
+                &SECRET_BYTES,
+                fee_rate,
+                INCLUSION_HEIGHT,
+                network,
+            ),
+            Err(MintlayerTransactionPlanError::InvalidHtlcOutput)
+        );
+
+        let htlc_output = build_mintlayer_htlc_output(
+            100_000_000_000,
+            secret_hash.as_bytes(),
+            &spend_address,
+            &refund_address,
+            TIME_LOCK,
+            network,
+        )
+        .unwrap();
+
+        assert_eq!(
+            plan_signed_htlc_spend_offline(
+                PAYMENT_TXID,
+                0,
+                &htlc_output,
+                &spend_address,
+                &spend_key,
+                &[0_u8; 31],
+                fee_rate,
+                INCLUSION_HEIGHT,
+                network,
+            ),
+            Err(MintlayerTransactionPlanError::InvalidHtlcSecretLength(31))
+        );
+
+        let tiny_htlc = build_mintlayer_htlc_output(
+            1,
+            secret_hash.as_bytes(),
+            &spend_address,
+            &refund_address,
+            TIME_LOCK,
+            network,
+        )
+        .unwrap();
+
+        assert_eq!(
+            plan_signed_htlc_spend_offline(
+                PAYMENT_TXID,
+                0,
+                &tiny_htlc,
+                &spend_address,
+                &spend_key,
+                &SECRET_BYTES,
+                fee_rate,
+                INCLUSION_HEIGHT,
+                network,
+            ),
+            Err(MintlayerTransactionPlanError::HtlcAmountBelowFee)
         );
     }
 
