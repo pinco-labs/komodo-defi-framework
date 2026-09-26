@@ -111,6 +111,34 @@ pub fn plan_signed_transaction_offline(
     inclusion_height: u64,
     network: Network,
 ) -> Result<MintlayerSignedTransactionPlan, MintlayerTransactionPlanError> {
+    let payment_output = crypto::encode_output_transfer(Amount::from_atoms(send_atoms), recipient_address, network)
+        .map_err(sdk_error)?;
+
+    plan_signed_output_offline(
+        utxos,
+        sender_address,
+        payment_output,
+        send_atoms,
+        fee_rate,
+        spend_key,
+        inclusion_height,
+        network,
+    )
+}
+
+/// Builds and signs a Mintlayer transaction around an already constructed
+/// primary output, while preserving the canonical UTXO selection, fee
+/// convergence, change and input-signing path used by ordinary transfers.
+pub fn plan_signed_output_offline(
+    utxos: &[MintlayerUtxo],
+    sender_address: &str,
+    payment_output: TxOutput,
+    send_atoms: u128,
+    fee_rate: MintlayerFeeRate,
+    spend_key: &PrivateKey,
+    inclusion_height: u64,
+    network: Network,
+) -> Result<MintlayerSignedTransactionPlan, MintlayerTransactionPlanError> {
     if send_atoms == 0 {
         return Err(MintlayerTransactionPlanError::ZeroSendAmount);
     }
@@ -122,7 +150,6 @@ pub fn plan_signed_transaction_offline(
     }
 
     crypto::encode_destination(sender_address, network).map_err(sdk_error)?;
-    crypto::encode_destination(recipient_address, network).map_err(sdk_error)?;
 
     let mut fee_guess_atoms = 0_u128;
     let mut previous_non_final_state = None;
@@ -142,8 +169,7 @@ pub fn plan_signed_transaction_offline(
         let candidate = build_signed_candidate(
             &selection,
             sender_address,
-            recipient_address,
-            send_atoms,
+            payment_output.clone(),
             change_atoms,
             spend_key,
             inclusion_height,
@@ -167,8 +193,7 @@ pub fn plan_signed_transaction_offline(
             let no_change = build_signed_candidate(
                 &selection,
                 sender_address,
-                recipient_address,
-                send_atoms,
+                payment_output.clone(),
                 0,
                 spend_key,
                 inclusion_height,
@@ -214,8 +239,7 @@ struct SignedCandidate {
 fn build_signed_candidate(
     selection: &MintlayerUtxoSelection,
     sender_address: &str,
-    recipient_address: &str,
-    send_atoms: u128,
+    payment_output: TxOutput,
     change_atoms: u128,
     spend_key: &PrivateKey,
     inclusion_height: u64,
@@ -249,10 +273,7 @@ fn build_signed_candidate(
         })
         .collect::<Vec<_>>();
 
-    let mut outputs = vec![
-        crypto::encode_output_transfer(Amount::from_atoms(send_atoms), recipient_address, network)
-            .map_err(sdk_error)?,
-    ];
+    let mut outputs = vec![payment_output];
     if change_atoms > 0 {
         outputs.push(
             crypto::encode_output_transfer(Amount::from_atoms(change_atoms), sender_address, network)
@@ -424,6 +445,63 @@ mod tests {
             transaction_enum.tx_hash_as_bytes(),
             BytesJson::from(hex::decode(&canonical_txid).unwrap())
         );
+    }
+
+    #[test]
+    fn plans_and_signs_htlc_output_offline() {
+        use crate::mintlayer::build_mintlayer_htlc_output;
+
+        const SECRET_HASH: [u8; 20] = [
+            0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x10, 0x20,
+            0x30, 0x40,
+        ];
+        const TIME_LOCK: u64 = 1_800_000_000;
+
+        let network = Network::Mainnet;
+        let account_key = crypto::make_default_account_privkey(PUBLIC_TEST_MNEMONIC, network, None).unwrap();
+        let spend_key = crypto::make_receiving_address(&account_key, 0).unwrap();
+        let sender_address = address_for_key(&spend_key, network);
+        let recipient_key = crypto::make_receiving_address(&account_key, 1).unwrap();
+        let recipient_address = address_for_key(&recipient_key, network);
+
+        let utxos = vec![
+            coin_utxo("11".repeat(32), 0, 60_000_000_000, "0.6", &sender_address),
+            coin_utxo("22".repeat(32), 1, 40_000_000_000, "0.4", &sender_address),
+        ];
+
+        let htlc_output = build_mintlayer_htlc_output(
+            50_000_000_000,
+            &SECRET_HASH,
+            &recipient_address,
+            &sender_address,
+            TIME_LOCK,
+            network,
+        )
+        .unwrap();
+
+        let plan = plan_signed_output_offline(
+            &utxos,
+            &sender_address,
+            htlc_output,
+            50_000_000_000,
+            MintlayerFeeRate::from_atoms_per_kb(FEE_RATE_ATOMS_PER_KB),
+            &spend_key,
+            INCLUSION_HEIGHT,
+            network,
+        )
+        .unwrap();
+
+        assert_eq!(
+            canonical_transaction_id_from_signed_bytes(&plan.signed_bytes).unwrap(),
+            plan.transaction_id
+        );
+        assert_eq!(
+            plan.send_atoms + plan.change_atoms + plan.fee_atoms,
+            plan.selected_atoms
+        );
+
+        let transaction = crypto::decode_transaction_lenient(&plan.signed_bytes).unwrap();
+        assert!(matches!(transaction.outputs().first(), Some(TxOutput::Htlc(_, _))));
     }
 
     #[test]
