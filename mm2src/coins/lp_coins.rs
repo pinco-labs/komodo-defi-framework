@@ -4890,7 +4890,10 @@ pub enum CoinProtocol {
 
 #[cfg(test)]
 mod mintlayer_protocol_tests {
-    use super::CoinProtocol;
+    use super::*;
+
+    const OFFICIAL_MINTLAYER_PUBLIC_KEY: &str = "03bf6f8d52dade77f95e9c6c9488fd8492a99c09ff23095caffb2e6409d1746ade";
+    const OFFICIAL_MINTLAYER_MAINNET_ADDRESS: &str = "mtc1qyumjs84s5nqgcp6nw9kwde9mn7akph6hgtulsdk";
 
     #[test]
     fn test_mintlayer_coin_protocol_serde() {
@@ -4899,6 +4902,30 @@ mod mintlayer_protocol_tests {
 
         assert!(matches!(protocol, CoinProtocol::MINTLAYER));
         assert_eq!(serde_json::to_value(protocol).unwrap(), protocol_json);
+    }
+
+    #[test]
+    fn test_mintlayer_orderbook_address_from_pubkey() {
+        let ctx = mm2_core::mm_ctx::MmCtxBuilder::default().into_mm_arc();
+        let conf = serde_json::json!({
+            "coin": "ML",
+            "network": "mainnet",
+            "decimals": 11,
+            "required_confirmations": 2,
+            "genesis_block_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "protocol": {"type": "MINTLAYER"}
+        });
+
+        let address = address_by_coin_conf_and_pubkey_str(
+            &ctx,
+            "ML",
+            &conf,
+            OFFICIAL_MINTLAYER_PUBLIC_KEY,
+            UtxoAddressFormat::Standard,
+        )
+        .unwrap();
+
+        assert_eq!(address, OFFICIAL_MINTLAYER_MAINNET_ADDRESS);
     }
 }
 
@@ -5994,7 +6021,14 @@ pub fn address_by_coin_conf_and_pubkey_str(
         // this will require significant changes and this function is only called from "legacy" dispatcher's `orderbook` rpc
         // so it's not a priority right now
         CoinProtocol::SIA => ERR!("address_by_coin_conf_and_pubkey_str is not supported for SIA protocol!"),
-        CoinProtocol::MINTLAYER => ERR!("address_by_coin_conf_and_pubkey_str is not implemented for MINTLAYER yet."),
+        CoinProtocol::MINTLAYER => {
+            let mintlayer_conf: mintlayer::MintlayerCoinConf = try_s!(json::from_value(conf.clone()));
+            let pubkey_hex = pubkey.strip_prefix("0x").unwrap_or(pubkey);
+            let pubkey_bytes = hex::decode(pubkey_hex).map_err(|e| ERRL!("{}", e))?;
+
+            mintlayer::mintlayer_address_from_compressed_public_key(mintlayer_conf.network, &pubkey_bytes)
+                .map_err(|e| e.to_string())
+        },
         CoinProtocol::SOLANA(_) => ERR!("address_by_coin_conf_and_pubkey_str is not implemented for SOLANA yet."),
         CoinProtocol::SOLANATOKEN(_) => {
             ERR!("address_by_coin_conf_and_pubkey_str is not implemented for SOLANATOKEN yet.")

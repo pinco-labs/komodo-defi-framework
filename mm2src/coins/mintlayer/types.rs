@@ -96,10 +96,91 @@ pub struct MintlayerUtxo {
     pub utxo: Json,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct MintlayerHtlcInfo {
+    pub secret: Option<Json>,
+    pub secret_hash: Json,
+    pub spend_key: String,
+    pub refund_timelock: Json,
+    pub refund_key: String,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct MintlayerTransactionOutput {
+    #[serde(rename = "type")]
+    pub output_type: String,
+    pub value: Json,
+    pub htlc: Option<MintlayerHtlcInfo>,
+    pub spent_at_block_height: Option<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct MintlayerTransactionInput {
+    pub input_type: String,
+    pub source_type: Option<String>,
+    pub source_id: Option<String>,
+    pub index: Option<u32>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct MintlayerTransactionInputInfo {
+    pub input: MintlayerTransactionInput,
+    pub utxo: Option<Json>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct MintlayerTransactionInfo {
+    pub id: String,
+    pub block_id: String,
+    pub inputs: Vec<MintlayerTransactionInputInfo>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tx_hex: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn deserialize_htlc_transaction_output() {
+        let response = json!({
+            "type": "Htlc",
+            "value": {
+                "type": "Coin",
+                "amount": {
+                    "atoms": "50000000000",
+                    "decimal": "0.5"
+                }
+            },
+            "htlc": {
+                "secret": null,
+                "secret_hash": {
+                    "string": null,
+                    "hex": "112233445566778899aabbccddeeff0010203040"
+                },
+                "spend_key": "mtc1qspend",
+                "refund_timelock": {
+                    "UntilTime": 1800000000
+                },
+                "refund_key": "mtc1qrefund"
+            },
+            "spent_at_block_height": 700123
+        });
+
+        let output: MintlayerTransactionOutput = serde_json::from_value(response).unwrap();
+
+        assert_eq!(output.output_type, "Htlc");
+        assert_eq!(output.spent_at_block_height, Some(700123));
+
+        let htlc = output.htlc.expect("HTLC metadata must be present");
+
+        assert!(htlc.secret.is_none());
+        assert_eq!(htlc.secret_hash["hex"], "112233445566778899aabbccddeeff0010203040");
+        assert_eq!(htlc.spend_key, "mtc1qspend");
+        assert_eq!(htlc.refund_timelock["UntilTime"], 1800000000);
+        assert_eq!(htlc.refund_key, "mtc1qrefund");
+    }
 
     #[test]
     fn deserialize_genesis_info_ignores_unneeded_fields() {

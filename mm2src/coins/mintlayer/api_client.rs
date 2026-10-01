@@ -1,11 +1,16 @@
 use crate::mintlayer::{
-    MintlayerAddressInfo, MintlayerAmount, MintlayerChainTip, MintlayerFeeRate, MintlayerGenesisInfo, MintlayerUtxo,
+    MintlayerAddressInfo, MintlayerAmount, MintlayerChainTip, MintlayerFeeRate, MintlayerGenesisInfo,
+    MintlayerTransactionInfo, MintlayerTransactionOutput, MintlayerUtxo,
 };
 use async_std::prelude::FutureExt;
 use async_trait::async_trait;
 use compatible_time::Duration;
 use http::StatusCode;
+#[cfg(not(target_arch = "wasm32"))]
+use mm2_net::transport::slurp_req;
 use mm2_net::transport::slurp_url;
+#[cfg(target_arch = "wasm32")]
+use mm2_net::wasm::http::FetchRequest;
 use serde::de::DeserializeOwned;
 use std::sync::Arc;
 use thiserror::Error;
@@ -39,13 +44,61 @@ pub enum MintlayerApiError {
     EmptyPathSegment,
     #[error("Cannot construct Mintlayer API URL from '{base_url}'")]
     EndpointUrlConstruction { base_url: String },
+    #[error("Mintlayer signed transaction hex is empty or invalid")]
+    InvalidSignedTransactionHex,
+    #[error("Mintlayer transaction submission rejected by '{endpoint}' with HTTP {status}: {body}")]
+    SubmissionRejected {
+        endpoint: String,
+        status: u16,
+        body: String,
+    },
+    #[error("Mintlayer transaction submission outcome at '{endpoint}' is unknown for txid '{expected}': {reason}")]
+    SubmissionOutcomeUnknown {
+        endpoint: String,
+        expected: String,
+        reason: String,
+    },
+    #[error("Mintlayer transaction submission at '{endpoint}' returned txid '{actual}' but expected '{expected}'")]
+    SubmissionTxIdMismatch {
+        endpoint: String,
+        expected: String,
+        actual: String,
+    },
     #[error("All Mintlayer API endpoints failed: {failures:?}")]
     AllEndpointsFailed { failures: Vec<MintlayerEndpointFailure> },
+}
+
+impl MintlayerApiError {
+    pub(crate) fn is_transaction_not_found(&self) -> bool {
+        let Self::AllEndpointsFailed { failures } = self else {
+            return false;
+        };
+
+        !failures.is_empty()
+            && failures.iter().all(|failure| {
+                let MintlayerEndpointError::HttpStatus { status, body } = &failure.error else {
+                    return false;
+                };
+
+                *status == StatusCode::NOT_FOUND.as_u16()
+                    && serde_json::from_str::<serde_json::Value>(body)
+                        .ok()
+                        .and_then(|value| {
+                            value
+                                .get("error")
+                                .and_then(serde_json::Value::as_str)
+                                .map(str::to_owned)
+                        })
+                        .as_deref()
+                        == Some("Transaction not found")
+            })
+    }
 }
 
 #[async_trait]
 pub trait MintlayerHttpTransport: Send + Sync + 'static {
     async fn get(&self, url: &str) -> Result<(StatusCode, Vec<u8>), String>;
+    async fn post(&self, url: &str, body: &str) -> Result<(StatusCode, Vec<u8>), String>;
 }
 
 #[derive(Debug, Default)]
@@ -59,6 +112,44 @@ impl MintlayerHttpTransport for KdfMintlayerHttpTransport {
             .map(|(status, _headers, body)| (status, body))
             .map_err(|error| error.into_inner().to_string())
     }
+
+    async fn post(&self, url: &str, body: &str) -> Result<(StatusCode, Vec<u8>), String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let request = http::Request::builder()
+                .method(http::Method::POST)
+                .uri(url)
+                .header(http::header::CONTENT_TYPE, "text/plain")
+                .body(body.as_bytes().to_vec())
+                .map_err(|error| error.to_string())?;
+
+            return slurp_req(request)
+                .await
+                .map(|(status, _headers, body)| (status, body))
+                .map_err(|error| error.into_inner().to_string());
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            FetchRequest::post(url)
+                .header(http::header::CONTENT_TYPE.as_str(), "text/plain")
+                .body_utf8(body.to_owned())
+                .request_str()
+                .await
+                .map(|(status, body)| (status, body.into_bytes()))
+                .map_err(|error| error.into_inner().to_string())
+        }
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct MintlayerBlockHeightInfo {
+    height: u64,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct MintlayerSubmitTransactionResponse {
+    tx_id: String,
 }
 
 #[derive(Debug)]
@@ -115,6 +206,28 @@ where
         self.get_json(&["chain", "tip"]).await
     }
 
+    pub async fn block_height(&self, block_id: &str) -> Result<u64, MintlayerApiError> {
+        validate_path_segment(block_id)?;
+        let block: MintlayerBlockHeightInfo = self.get_json(&["block", block_id]).await?;
+        Ok(block.height)
+    }
+
+    pub async fn main_chain_block_id(&self, block_height: u64) -> Result<String, MintlayerApiError> {
+        let block_height = block_height.to_string();
+        self.get_json(&["chain", &block_height]).await
+    }
+
+    pub async fn block_height_in_main_chain(&self, block_id: &str) -> Result<Option<u64>, MintlayerApiError> {
+        let block_height = self.block_height(block_id).await?;
+        let main_chain_block_id = self.main_chain_block_id(block_height).await?;
+
+        if main_chain_block_id.eq_ignore_ascii_case(block_id) {
+            Ok(Some(block_height))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub async fn fee_rate(&self) -> Result<MintlayerFeeRate, MintlayerApiError> {
         self.get_json(&["feerate"]).await
     }
@@ -130,6 +243,201 @@ where
     pub async fn spendable_utxos(&self, address: &str) -> Result<Vec<MintlayerUtxo>, MintlayerApiError> {
         validate_path_segment(address)?;
         self.get_json(&["address", address, "spendable-utxos"]).await
+    }
+
+    pub async fn submit_transaction(
+        &self,
+        signed_transaction_hex: &str,
+        expected_transaction_id: &str,
+    ) -> Result<String, MintlayerApiError> {
+        validate_path_segment(expected_transaction_id)?;
+
+        if signed_transaction_hex.is_empty()
+            || signed_transaction_hex.len() % 2 != 0
+            || !signed_transaction_hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+        {
+            return Err(MintlayerApiError::InvalidSignedTransactionHex);
+        }
+
+        let mut failures = Vec::with_capacity(self.api_urls.len());
+
+        for base_url in &self.api_urls {
+            let endpoint = build_endpoint_url(base_url, &["transaction"])?;
+            let endpoint_string = endpoint.to_string();
+            let response = self
+                .transport
+                .post(endpoint.as_str(), signed_transaction_hex)
+                .timeout(self.timeout)
+                .await;
+
+            let (status, body) = match response {
+                Err(_) => {
+                    return Err(MintlayerApiError::SubmissionOutcomeUnknown {
+                        endpoint: endpoint_string,
+                        expected: expected_transaction_id.to_owned(),
+                        reason: "request timed out after dispatch; the endpoint may have accepted the transaction"
+                            .to_owned(),
+                    });
+                },
+                Ok(Err(error)) => {
+                    return Err(MintlayerApiError::SubmissionOutcomeUnknown {
+                        endpoint: endpoint_string,
+                        expected: expected_transaction_id.to_owned(),
+                        reason: format!(
+                            "transport error after dispatch; the endpoint may have accepted the transaction: {error}"
+                        ),
+                    });
+                },
+                Ok(Ok(response)) => response,
+            };
+
+            if !status.is_success() {
+                let body_preview = response_body_preview(&body);
+
+                if status == StatusCode::FORBIDDEN
+                    || status == StatusCode::NOT_FOUND
+                    || status == StatusCode::METHOD_NOT_ALLOWED
+                    || status == StatusCode::TOO_MANY_REQUESTS
+                    || status == StatusCode::NOT_IMPLEMENTED
+                {
+                    failures.push(MintlayerEndpointFailure {
+                        endpoint: endpoint_string,
+                        error: MintlayerEndpointError::HttpStatus {
+                            status: status.as_u16(),
+                            body: body_preview,
+                        },
+                    });
+                    continue;
+                }
+
+                if status.is_server_error() {
+                    return Err(MintlayerApiError::SubmissionOutcomeUnknown {
+                        endpoint: endpoint_string,
+                        expected: expected_transaction_id.to_owned(),
+                        reason: format!(
+                            "HTTP {} after submission attempt; the endpoint may have accepted the transaction: {}",
+                            status.as_u16(),
+                            body_preview
+                        ),
+                    });
+                }
+
+                return Err(MintlayerApiError::SubmissionRejected {
+                    endpoint: endpoint_string,
+                    status: status.as_u16(),
+                    body: body_preview,
+                });
+            }
+
+            let response = serde_json::from_slice::<MintlayerSubmitTransactionResponse>(&body).map_err(|error| {
+                MintlayerApiError::SubmissionOutcomeUnknown {
+                    endpoint: endpoint_string.clone(),
+                    expected: expected_transaction_id.to_owned(),
+                    reason: format!(
+                        "successful HTTP response could not be parsed; the transaction may have been accepted: {}; body: {}",
+                        error,
+                        response_body_preview(&body)
+                    ),
+                }
+            })?;
+
+            if response.tx_id != expected_transaction_id {
+                return Err(MintlayerApiError::SubmissionTxIdMismatch {
+                    endpoint: endpoint_string,
+                    expected: expected_transaction_id.to_owned(),
+                    actual: response.tx_id,
+                });
+            }
+
+            return Ok(response.tx_id);
+        }
+
+        Err(MintlayerApiError::AllEndpointsFailed { failures })
+    }
+
+    pub async fn transaction(&self, transaction_id: &str) -> Result<MintlayerTransactionInfo, MintlayerApiError> {
+        validate_path_segment(transaction_id)?;
+        self.get_json(&["transaction", transaction_id]).await
+    }
+
+    /// Fetches a transaction from an API endpoint that exposes the canonical
+    /// encoded SignedTransaction in the additive `tx_hex` field.
+    ///
+    /// A successful HTTP/JSON response without `tx_hex` is treated as an
+    /// endpoint capability miss and failover continues to the next configured
+    /// API endpoint.
+    pub async fn transaction_with_tx_hex(
+        &self,
+        transaction_id: &str,
+    ) -> Result<MintlayerTransactionInfo, MintlayerApiError> {
+        validate_path_segment(transaction_id)?;
+
+        let endpoint_path = ["transaction", transaction_id];
+        let mut failures = Vec::with_capacity(self.api_urls.len());
+
+        for base_url in &self.api_urls {
+            let endpoint = build_endpoint_url(base_url, &endpoint_path)?;
+            let endpoint_string = endpoint.to_string();
+            let response = self.transport.get(endpoint.as_str()).timeout(self.timeout).await;
+
+            let (status, body) = match response {
+                Err(_) => {
+                    failures.push(MintlayerEndpointFailure {
+                        endpoint: endpoint_string,
+                        error: MintlayerEndpointError::Timeout,
+                    });
+                    continue;
+                },
+                Ok(Err(error)) => {
+                    failures.push(MintlayerEndpointFailure {
+                        endpoint: endpoint_string,
+                        error: MintlayerEndpointError::Transport(error),
+                    });
+                    continue;
+                },
+                Ok(Ok(response)) => response,
+            };
+
+            if !status.is_success() {
+                failures.push(MintlayerEndpointFailure {
+                    endpoint: endpoint_string,
+                    error: MintlayerEndpointError::HttpStatus {
+                        status: status.as_u16(),
+                        body: response_body_preview(&body),
+                    },
+                });
+                continue;
+            }
+
+            match serde_json::from_slice::<MintlayerTransactionInfo>(&body) {
+                Ok(response) if response.tx_hex.as_ref().map_or(false, |tx_hex| !tx_hex.is_empty()) => {
+                    return Ok(response);
+                },
+                Ok(_) => failures.push(MintlayerEndpointFailure {
+                    endpoint: endpoint_string,
+                    error: MintlayerEndpointError::InvalidResponse(
+                        "Mintlayer transaction response does not include a non-empty tx_hex field".to_owned(),
+                    ),
+                }),
+                Err(error) => failures.push(MintlayerEndpointFailure {
+                    endpoint: endpoint_string,
+                    error: MintlayerEndpointError::InvalidResponse(error.to_string()),
+                }),
+            }
+        }
+
+        Err(MintlayerApiError::AllEndpointsFailed { failures })
+    }
+
+    pub async fn transaction_output(
+        &self,
+        transaction_id: &str,
+        output_index: u32,
+    ) -> Result<MintlayerTransactionOutput, MintlayerApiError> {
+        validate_path_segment(transaction_id)?;
+        let output_index = output_index.to_string();
+        self.get_json(&["transaction", transaction_id, "output", &output_index])
+            .await
     }
 
     async fn get_json<R>(&self, endpoint_path: &[&str]) -> Result<R, MintlayerApiError>
@@ -284,6 +592,7 @@ mod tests {
     struct MockTransport {
         responses: Mutex<VecDeque<MockResponse>>,
         requested_urls: Mutex<Vec<String>>,
+        requested_posts: Mutex<Vec<(String, String)>>,
     }
 
     impl MockTransport {
@@ -291,11 +600,16 @@ mod tests {
             MockTransport {
                 responses: Mutex::new(responses.into()),
                 requested_urls: Mutex::new(Vec::new()),
+                requested_posts: Mutex::new(Vec::new()),
             }
         }
 
         fn requested_urls(&self) -> Vec<String> {
             self.requested_urls.lock().unwrap().clone()
+        }
+
+        fn requested_posts(&self) -> Vec<(String, String)> {
+            self.requested_posts.lock().unwrap().clone()
         }
     }
 
@@ -303,6 +617,19 @@ mod tests {
     impl MintlayerHttpTransport for MockTransport {
         async fn get(&self, url: &str) -> Result<(StatusCode, Vec<u8>), String> {
             self.requested_urls.lock().unwrap().push(url.to_string());
+
+            self.responses
+                .lock()
+                .unwrap()
+                .pop_front()
+                .unwrap_or_else(|| Err("No mocked response configured".into()))
+        }
+
+        async fn post(&self, url: &str, body: &str) -> Result<(StatusCode, Vec<u8>), String> {
+            self.requested_posts
+                .lock()
+                .unwrap()
+                .push((url.to_string(), body.to_owned()));
 
             self.responses
                 .lock()
@@ -369,6 +696,56 @@ mod tests {
         assert_eq!(
             transport.requested_urls(),
             vec!["https://api-1.example/api/v2/chain/tip"]
+        );
+    }
+
+    #[test]
+    fn block_height_in_main_chain_accepts_matching_id_case_insensitively() {
+        let block_id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let uppercase_block_id = block_id.to_ascii_uppercase();
+
+        let (client, transport) = client_with_responses(
+            vec![api_url("api.example")],
+            vec![
+                Ok((StatusCode::OK, br#"{"height":700000}"#.to_vec())),
+                Ok((StatusCode::OK, serde_json::to_vec(&uppercase_block_id).unwrap())),
+            ],
+        );
+
+        let height = block_on(client.block_height_in_main_chain(block_id)).unwrap();
+
+        assert_eq!(height, Some(700000));
+        assert_eq!(
+            transport.requested_urls(),
+            vec![
+                format!("https://api.example/api/v2/block/{block_id}"),
+                "https://api.example/api/v2/chain/700000".to_owned(),
+            ]
+        );
+    }
+
+    #[test]
+    fn block_height_in_main_chain_rejects_competing_block_at_same_height() {
+        let block_id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let competing_id = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+        let (client, transport) = client_with_responses(
+            vec![api_url("api.example")],
+            vec![
+                Ok((StatusCode::OK, br#"{"height":700000}"#.to_vec())),
+                Ok((StatusCode::OK, serde_json::to_vec(competing_id).unwrap())),
+            ],
+        );
+
+        let height = block_on(client.block_height_in_main_chain(block_id)).unwrap();
+
+        assert_eq!(height, None);
+        assert_eq!(
+            transport.requested_urls(),
+            vec![
+                format!("https://api.example/api/v2/block/{block_id}"),
+                "https://api.example/api/v2/chain/700000".to_owned(),
+            ]
         );
     }
 
@@ -573,6 +950,253 @@ mod tests {
         assert_eq!(
             transport.requested_urls(),
             vec!["https://api.example/api/v2/address/mtc1qexample/spendable-utxos"]
+        );
+    }
+
+    #[test]
+    fn request_transaction_observation() {
+        let txid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+        let response = br#"{
+            "id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "version_byte":1,
+            "is_replaceable":false,
+            "flags":0,
+            "fee":{"atoms":"100","decimal":"0.000000001"},
+            "inputs":[{
+                "input":{
+                    "input_type":"UTXO",
+                    "source_type":"Transaction",
+                    "source_id":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    "index":0
+                },
+                "utxo":{
+                    "type":"Htlc",
+                    "htlc":{
+                        "secret":{"string":null,"hex":"00112233"},
+                        "secret_hash":{"string":null,"hex":"aabbccdd"},
+                        "spend_key":"mtc1qspend",
+                        "refund_timelock":{"UntilTime":1800000000},
+                        "refund_key":"mtc1qrefund"
+                    }
+                }
+            }],
+            "outputs":[],
+            "block_id":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "timestamp":"1800000100",
+            "confirmations":"7"
+        }"#
+        .to_vec();
+
+        let (client, transport) =
+            client_with_responses(vec![api_url("api.example")], vec![Ok((StatusCode::OK, response))]);
+
+        let transaction = block_on(client.transaction(txid)).unwrap();
+
+        assert_eq!(transaction.id, txid);
+        assert_eq!(transaction.block_id, "cc".repeat(32));
+        assert_eq!(transaction.inputs.len(), 1);
+
+        let input = &transaction.inputs[0];
+        assert_eq!(input.input.input_type, "UTXO");
+        assert_eq!(input.input.source_type.as_deref(), Some("Transaction"));
+        assert_eq!(
+            input.input.source_id.as_deref(),
+            Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+        );
+        assert_eq!(input.input.index, Some(0));
+
+        let utxo = input.utxo.as_ref().unwrap();
+        assert_eq!(utxo["type"], "Htlc");
+        assert_eq!(utxo["htlc"]["secret"]["hex"], "00112233");
+
+        assert_eq!(
+            transport.requested_urls(),
+            vec![format!("https://api.example/api/v2/transaction/{txid}")]
+        );
+    }
+
+    #[test]
+    fn submit_transaction_stops_after_transport_error_because_outcome_is_unknown() {
+        let txid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let signed_hex = "01020304";
+        let success = serde_json::json!({ "tx_id": txid }).to_string().into_bytes();
+        let (client, transport) = client_with_responses(
+            vec![api_url("api-1.example"), api_url("api-2.example")],
+            vec![Err("connection reset".to_owned()), Ok((StatusCode::OK, success))],
+        );
+
+        assert!(matches!(
+            block_on(client.submit_transaction(signed_hex, txid)).unwrap_err(),
+            MintlayerApiError::SubmissionOutcomeUnknown {
+                endpoint,
+                expected,
+                ..
+            } if endpoint == "https://api-1.example/api/v2/transaction" && expected == txid
+        ));
+        assert_eq!(transport.requested_posts().len(), 1);
+    }
+
+    #[test]
+    fn submit_transaction_stops_after_server_error_because_outcome_is_unknown() {
+        let txid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let signed_hex = "01020304";
+        let success = serde_json::json!({ "tx_id": txid }).to_string().into_bytes();
+        let (client, transport) = client_with_responses(
+            vec![api_url("api-1.example"), api_url("api-2.example")],
+            vec![
+                Ok((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    br#"{"error":"upstream RPC failed"}"#.to_vec(),
+                )),
+                Ok((StatusCode::OK, success)),
+            ],
+        );
+
+        assert!(matches!(
+            block_on(client.submit_transaction(signed_hex, txid)).unwrap_err(),
+            MintlayerApiError::SubmissionOutcomeUnknown {
+                endpoint,
+                expected,
+                ..
+            } if endpoint == "https://api-1.example/api/v2/transaction" && expected == txid
+        ));
+        assert_eq!(transport.requested_posts().len(), 1);
+    }
+
+    #[test]
+    fn submit_transaction_stops_after_invalid_success_body_because_outcome_is_unknown() {
+        let txid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let signed_hex = "01020304";
+        let success = serde_json::json!({ "tx_id": txid }).to_string().into_bytes();
+        let (client, transport) = client_with_responses(
+            vec![api_url("api-1.example"), api_url("api-2.example")],
+            vec![
+                Ok((StatusCode::OK, b"not-json".to_vec())),
+                Ok((StatusCode::OK, success)),
+            ],
+        );
+
+        assert!(matches!(
+            block_on(client.submit_transaction(signed_hex, txid)).unwrap_err(),
+            MintlayerApiError::SubmissionOutcomeUnknown {
+                endpoint,
+                expected,
+                ..
+            } if endpoint == "https://api-1.example/api/v2/transaction" && expected == txid
+        ));
+        assert_eq!(transport.requested_posts().len(), 1);
+    }
+
+    #[test]
+    fn submit_transaction_posts_raw_hex_and_checks_txid() {
+        let txid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let signed_hex = "01020304";
+        let response = serde_json::json!({ "tx_id": txid }).to_string().into_bytes();
+        let (client, transport) =
+            client_with_responses(vec![api_url("api.example")], vec![Ok((StatusCode::OK, response))]);
+
+        assert_eq!(block_on(client.submit_transaction(signed_hex, txid)).unwrap(), txid);
+        assert_eq!(
+            transport.requested_posts(),
+            vec![(
+                "https://api.example/api/v2/transaction".to_owned(),
+                signed_hex.to_owned(),
+            )]
+        );
+    }
+
+    #[test]
+    fn submit_transaction_fails_over_but_not_after_semantic_rejection() {
+        let txid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let signed_hex = "01020304";
+        let success = serde_json::json!({ "tx_id": txid }).to_string().into_bytes();
+
+        let (client, transport) = client_with_responses(
+            vec![api_url("api-1.example"), api_url("api-2.example")],
+            vec![
+                Ok((StatusCode::FORBIDDEN, br#"{"error":"POST disabled"}"#.to_vec())),
+                Ok((StatusCode::OK, success)),
+            ],
+        );
+
+        assert_eq!(block_on(client.submit_transaction(signed_hex, txid)).unwrap(), txid);
+        assert_eq!(transport.requested_posts().len(), 2);
+
+        let (client, transport) = client_with_responses(
+            vec![api_url("api-1.example"), api_url("api-2.example")],
+            vec![
+                Ok((
+                    StatusCode::BAD_REQUEST,
+                    br#"{"error":"Invalid signed transaction"}"#.to_vec(),
+                )),
+                Ok((
+                    StatusCode::OK,
+                    serde_json::json!({ "tx_id": txid }).to_string().into_bytes(),
+                )),
+            ],
+        );
+
+        assert!(matches!(
+            block_on(client.submit_transaction(signed_hex, txid)).unwrap_err(),
+            MintlayerApiError::SubmissionRejected { status: 400, .. }
+        ));
+        assert_eq!(transport.requested_posts().len(), 1);
+    }
+
+    #[test]
+    fn submit_transaction_rejects_response_txid_mismatch() {
+        let expected = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let actual = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let response = serde_json::json!({ "tx_id": actual }).to_string().into_bytes();
+        let (client, transport) =
+            client_with_responses(vec![api_url("api.example")], vec![Ok((StatusCode::OK, response))]);
+
+        assert_eq!(
+            block_on(client.submit_transaction("01020304", expected)).unwrap_err(),
+            MintlayerApiError::SubmissionTxIdMismatch {
+                endpoint: "https://api.example/api/v2/transaction".to_owned(),
+                expected: expected.to_owned(),
+                actual: actual.to_owned(),
+            }
+        );
+        assert_eq!(transport.requested_posts().len(), 1);
+    }
+
+    #[test]
+    fn transaction_with_tx_hex_skips_endpoint_without_capability() {
+        let txid = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+        let without_tx_hex = br#"{
+            "id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "block_id":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "inputs":[]
+        }"#
+        .to_vec();
+
+        let with_tx_hex = br#"{
+            "id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "block_id":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "inputs":[],
+            "tx_hex":"01020304"
+        }"#
+        .to_vec();
+
+        let (client, transport) = client_with_responses(
+            vec![api_url("api-1.example"), api_url("api-2.example")],
+            vec![Ok((StatusCode::OK, without_tx_hex)), Ok((StatusCode::OK, with_tx_hex))],
+        );
+
+        let transaction = block_on(client.transaction_with_tx_hex(txid)).unwrap();
+
+        assert_eq!(transaction.id, txid);
+        assert_eq!(transaction.tx_hex.as_deref(), Some("01020304"));
+        assert_eq!(
+            transport.requested_urls(),
+            vec![
+                format!("https://api-1.example/api/v2/transaction/{txid}"),
+                format!("https://api-2.example/api/v2/transaction/{txid}"),
+            ]
         );
     }
 

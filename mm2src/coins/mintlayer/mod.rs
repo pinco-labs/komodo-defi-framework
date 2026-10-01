@@ -30,7 +30,8 @@ pub use transaction::{
     MintlayerHtlcResolutionPlan, MintlayerSignedTransactionPlan, MintlayerTransaction, MintlayerTransactionPlanError,
 };
 pub use types::{
-    MintlayerAddressInfo, MintlayerAmount, MintlayerChainTip, MintlayerGenesisInfo, MintlayerOutPoint,
-    MintlayerTokenBalance, MintlayerUtxo,
+    MintlayerAddressInfo, MintlayerAmount, MintlayerChainTip, MintlayerGenesisInfo, MintlayerHtlcInfo,
+    MintlayerOutPoint, MintlayerTokenBalance, MintlayerTransactionInfo, MintlayerTransactionInput,
+    MintlayerTransactionInputInfo, MintlayerTransactionOutput, MintlayerUtxo,
 };
 pub use utxo::{select_spendable_coin_utxos, MintlayerCoinUtxo, MintlayerUtxoSelection, MintlayerUtxoSelectionError};
