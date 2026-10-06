@@ -1,0 +1,211 @@
+{
+  "captured_utc": "2026-10-06T13:29:42.858741+00:00",
+  "source_kind": "local SWAPS/MY records",
+  "cross_side_fee_and_payment_hashes_match": true,
+  "records": [
+    {
+      "side": "A",
+      "uuid": "5b898e72-b79c-43ca-a200-0150f124ffce",
+      "source_sha256": "8d60125ee07714f64b393f5424dac21eeeee1ae37d5abc9e600e0ca73eb02f15",
+      "role": "Taker",
+      "maker_coin": "ML",
+      "taker_coin": "USDT-BEP20",
+      "observed_error_events": [],
+      "events": [
+        {
+          "event": "Started"
+        },
+        {
+          "event": "Negotiated"
+        },
+        {
+          "event": "TakerFeeSent",
+          "tx_hash": "bfbbda78b16546e1f1b5c770ffdc477b4d0c58f81196d095e6e24e5c121bd64c"
+        },
+        {
+          "event": "TakerPaymentInstructionsReceived"
+        },
+        {
+          "event": "MakerPaymentReceived",
+          "tx_hash": "a9ac92cc53d405c8558f41799b9f3d2ed90acf12a84b383946888d12ff4845d5"
+        },
+        {
+          "event": "MakerPaymentWaitConfirmStarted"
+        },
+        {
+          "event": "MakerPaymentValidatedAndConfirmed"
+        },
+        {
+          "event": "TakerPaymentSent",
+          "tx_hash": "d95a4d11dc00cc25496dc47e869fc79d92ffbeb092e165c0e22224ff1a0167ec"
+        },
+        {
+          "event": "TakerPaymentSpent"
+        },
+        {
+          "event": "MakerPaymentSpent",
+          "tx_hash": "abde36db9d8edb8a395d0dd1a0f24bd674c6ec7259ea765aa2730cf65362a36d"
+        },
+        {
+          "event": "MakerPaymentSpendConfirmed"
+        },
+        {
+          "event": "Finished"
+        }
+      ]
+    },
+    {
+      "side": "B",
+      "uuid": "5b898e72-b79c-43ca-a200-0150f124ffce",
+      "source_sha256": "e3a434ca6b0db5a7a1ef38693aab30961abc36553c10dbd6c5ca883f26f187c5",
+      "role": "Maker",
+      "maker_coin": "ML",
+      "taker_coin": "USDT-BEP20",
+      "observed_error_events": [],
+      "events": [
+        {
+          "event": "Started"
+        },
+        {
+          "event": "Negotiated"
+        },
+        {
+          "event": "MakerPaymentInstructionsReceived"
+        },
+        {
+          "event": "TakerFeeValidated",
+          "tx_hash": "bfbbda78b16546e1f1b5c770ffdc477b4d0c58f81196d095e6e24e5c121bd64c"
+        },
+        {
+          "event": "MakerPaymentSent",
+          "tx_hash": "a9ac92cc53d405c8558f41799b9f3d2ed90acf12a84b383946888d12ff4845d5"
+        },
+        {
+          "event": "TakerPaymentReceived",
+          "tx_hash": "d95a4d11dc00cc25496dc47e869fc79d92ffbeb092e165c0e22224ff1a0167ec"
+        },
+        {
+          "event": "TakerPaymentWaitConfirmStarted"
+        },
+        {
+          "event": "TakerPaymentValidatedAndConfirmed"
+        },
+        {
+          "event": "TakerPaymentSpent",
+          "tx_hash": "0d20591e725b0c4c6c91ce2721f01256d85080d85a24ae6e0751447a36c78eae"
+        },
+        {
+          "event": "TakerPaymentSpendConfirmStarted"
+        },
+        {
+          "event": "TakerPaymentSpendConfirmed"
+        },
+        {
+          "event": "Finished"
+        }
+      ]
+    },
+    {
+      "side": "A",
+      "uuid": "4abe88c3-7d2a-4f3f-9d42-4799956132dd",
+      "source_sha256": "52791bfbbf464b9e3b6a32c79855b3cef8e922cf1edb0c53a6d5f18fce0a05fe",
+      "role": "Maker",
+      "maker_coin": "USDT-BEP20",
+      "taker_coin": "ML",
+      "observed_error_events": [],
+      "events": [
+        {
+          "event": "Started"
+        },
+        {
+          "event": "Negotiated"
+        },
+        {
+          "event": "MakerPaymentInstructionsReceived"
+        },
+        {
+          "event": "TakerFeeValidated",
+          "tx_hash": "56c7697fd1cc5b0f84b3665d8a23a74a24ba8890a05bd9b6b571aa07c4f7fd30"
+        },
+        {
+          "event": "MakerPaymentSent",
+          "tx_hash": "25f9ac7a25989e8f4b2c9fc84a2a4cab7b7550160b9c57b8c2f7db7eee0b7f69"
+        },
+        {
+          "event": "TakerPaymentReceived",
+          "tx_hash": "167816a3625219f10dfd85d905fd69aa134cdb7ad1a090c8d058f20c87fe1a9f"
+        },
+        {
+          "event": "TakerPaymentWaitConfirmStarted"
+        },
+        {
+          "event": "TakerPaymentValidatedAndConfirmed"
+        },
+        {
+          "event": "TakerPaymentSpent",
+          "tx_hash": "04d28f371edd279c091dc380a3adf2b368e11f6a9c9a9c21724d578955fae7b4"
+        },
+        {
+          "event": "TakerPaymentSpendConfirmStarted"
+        },
+        {
+          "event": "TakerPaymentSpendConfirmed"
+        },
+        {
+          "event": "Finished"
+        }
+      ]
+    },
+    {
+      "side": "B",
+      "uuid": "4abe88c3-7d2a-4f3f-9d42-4799956132dd",
+      "source_sha256": "1f480da6bdaf493dd47390ec08e254fa5e0137da5e974b34180752c18ecc073a",
+      "role": "Taker",
+      "maker_coin": "USDT-BEP20",
+      "taker_coin": "ML",
+      "observed_error_events": [],
+      "events": [
+        {
+          "event": "Started"
+        },
+        {
+          "event": "Negotiated"
+        },
+        {
+          "event": "TakerFeeSent",
+          "tx_hash": "56c7697fd1cc5b0f84b3665d8a23a74a24ba8890a05bd9b6b571aa07c4f7fd30"
+        },
+        {
+          "event": "TakerPaymentInstructionsReceived"
+        },
+        {
+          "event": "MakerPaymentReceived",
+          "tx_hash": "25f9ac7a25989e8f4b2c9fc84a2a4cab7b7550160b9c57b8c2f7db7eee0b7f69"
+        },
+        {
+          "event": "MakerPaymentWaitConfirmStarted"
+        },
+        {
+          "event": "MakerPaymentValidatedAndConfirmed"
+        },
+        {
+          "event": "TakerPaymentSent",
+          "tx_hash": "167816a3625219f10dfd85d905fd69aa134cdb7ad1a090c8d058f20c87fe1a9f"
+        },
+        {
+          "event": "TakerPaymentSpent"
+        },
+        {
+          "event": "MakerPaymentSpent",
+          "tx_hash": "64196083acbcf62b9c7430fada9eebfc8665f2994f018db986bef0d3ca1fff85"
+        },
+        {
+          "event": "MakerPaymentSpendConfirmed"
+        },
+        {
+          "event": "Finished"
+        }
+      ]
+    }
+  ]
+}
