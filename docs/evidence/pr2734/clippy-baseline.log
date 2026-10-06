@@ -1,0 +1,885 @@
+   Compiling libc v0.2.174
+   Compiling quote v1.0.37
+   Compiling syn v2.0.87
+   Compiling syn v1.0.95
+   Compiling serde_derive v1.0.219
+    Checking getrandom v0.2.16
+   Compiling unicode-xid v0.2.0
+   Compiling synstructure v0.12.4
+   Compiling zeroize_derive v1.3.2
+    Checking serde v1.0.219
+    Checking zeroize v1.8.1
+    Checking generic-array v0.14.7
+    Checking rand_core v0.6.4
+    Checking crypto-common v0.1.6
+    Checking block-buffer v0.10.2
+    Checking digest v0.10.7
+    Checking sha2 v0.10.9
+   Compiling futures-macro v0.3.31
+    Checking futures-util v0.3.31
+    Checking bytes v1.10.1
+    Checking digest v0.9.0
+   Compiling thiserror-impl v1.0.69
+    Checking block-buffer v0.9.0
+    Checking rand_chacha v0.3.1
+    Checking rand v0.8.5
+    Checking getrandom v0.1.14
+    Checking sha2 v0.9.9
+    Checking rand_core v0.5.1
+   Compiling tokio-macros v2.5.0
+    Checking socket2 v0.6.0
+    Checking mio v1.0.4
+    Checking num_cpus v1.13.1
+    Checking tokio v1.47.0
+    Checking thiserror v1.0.69
+    Checking rand_chacha v0.2.2
+    Checking rand_pcg v0.2.1
+    Checking rand v0.7.3
+    Checking futures-executor v0.3.31
+   Compiling curve25519-dalek v4.1.3
+    Checking futures v0.3.31
+    Checking smallvec v1.15.1
+    Checking hex v0.4.3
+    Checking ring v0.16.20
+    Checking serde_bytes v0.11.17
+   Compiling bytemuck_derive v1.10.1
+    Checking parking_lot_core v0.9.1
+    Checking parking_lot v0.12.0
+    Checking solana-hash v2.3.0
+    Checking solana-sha256-hasher v2.3.0
+    Checking solana-pubkey v2.4.0
+    Checking serde_json v1.0.140
+    Checking url v2.5.2
+    Checking sct v0.7.0
+    Checking http v0.2.12
+    Checking curve25519-dalek v3.2.0
+    Checking tracing-core v0.1.31
+   Compiling tracing-attributes v0.1.26
+   Compiling pin-project-internal v1.1.2
+    Checking tracing v0.1.37
+    Checking ed25519 v1.5.3
+    Checking pin-project v1.1.2
+    Checking ed25519-dalek v1.0.1
+   Compiling async-trait v0.1.88
+    Checking uint v0.9.3
+    Checking tokio-util v0.7.16
+   Compiling derive_more v0.99.20
+    Checking asynchronous-codec v0.6.0
+   Compiling radium v0.7.0
+    Checking unsigned-varint v0.7.1
+   Compiling toml v0.5.7
+    Checking crypto-mac v0.8.0
+    Checking ring v0.17.3
+    Checking hmac v0.8.1
+   Compiling proc-macro-crate v1.1.3
+    Checking wyz v0.5.0
+    Checking http-body v0.4.5
+    Checking funty v2.0.0
+   Compiling either v1.8.1
+   Compiling itertools v0.10.3
+    Checking bitvec v1.0.0
+   Compiling data-encoding-macro-internal v0.1.11
+   Compiling parity-scale-codec-derive v3.1.2
+    Checking hmac-drbg v0.3.0
+    Checking h2 v0.3.24
+    Checking rlp v0.5.2
+    Checking libsecp256k1-core v0.3.0
+   Compiling impl-trait-for-tuples v0.2.1
+    Checking socket2 v0.4.9
+    Checking byte-slice-cast v1.0.0
+    Checking hyper v0.14.26
+    Checking parity-scale-codec v3.1.2
+    Checking multihash v0.19.0
+    Checking libsecp256k1 v0.7.0
+    Checking impl-rlp v0.3.0
+    Checking data-encoding-macro v0.1.13
+    Checking fixed-hash v0.7.0
+    Checking bincode v1.3.3
+    Checking impl-serde v0.3.2
+    Checking multibase v0.9.1
+    Checking solana-instruction v2.3.0
+    Checking impl-codec v0.6.0
+    Checking ahash v0.8.11
+    Checking primitive-types v0.11.1
+    Checking multistream-select v0.13.0 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking rand_os v0.1.3
+    Checking rw-stream-sink v0.4.0 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking sha-1 v0.9.8
+    Checking chrono v0.4.41
+    Checking libp2p-identity v0.2.1
+    Checking multiaddr v0.18.0
+    Checking libp2p-core v0.40.0 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking rand v0.6.5
+    Checking rustls-webpki v0.101.7
+    Checking solana-sdk-ids v2.2.1
+    Checking webpki v0.22.0
+   Compiling gstuff v0.7.15
+    Checking rustls v0.21.10
+    Checking secp256k1 v0.20.3
+   Compiling common v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/common)
+    Checking rustls v0.20.4
+    Checking num-bigint v0.4.6
+    Checking tokio-rustls v0.24.1
+   Compiling proc-macro-warning v0.4.1
+    Checking solana-sysvar-id v2.2.1
+    Checking hashbrown v0.13.2
+   Compiling prost-derive v0.12.6
+   Compiling ser_error v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/derives/ser_error)
+    Checking bs58 v0.4.0
+    Checking uuid v1.10.0
+    Checking ripemd160 v0.9.1
+    Checking block-padding v0.3.3
+    Checking backtrace v0.3.66
+    Checking inout v0.1.3
+   Compiling ser_error_derive v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/derives/ser_error_derive)
+   Compiling libp2p-swarm-derive v0.33.0 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking hyper-rustls v0.24.2
+    Checking findshlibs v0.5.0
+    Checking libp2p-swarm v0.43.0 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking cipher v0.4.4
+    Checking signature v2.2.0
+    Checking hmac v0.12.1
+   Compiling solana-sdk-macro v2.2.1
+    Checking netlink-packet-utils v0.5.2
+    Checking primitives v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_bitcoin/primitives)
+    Checking netlink-packet-core v0.7.0
+    Checking solana-program-error v2.2.2
+    Checking ed25519 v2.2.3
+    Checking netlink-sys v0.8.5
+    Checking hostname v0.3.1
+    Checking netlink-packet-route v0.17.1
+    Checking netlink-proto v0.11.3
+    Checking mm2_err_handle v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_err_handle)
+   Compiling enum-as-inner v0.5.1
+    Checking quick-protobuf-codec v0.2.0 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking nix v0.26.4
+    Checking solana-account-info v2.3.0
+    Checking rtnetlink v0.13.1
+    Checking resolv-conf v0.7.0
+    Checking blocking v0.4.6
+    Checking trust-dns-proto v0.22.0
+    Checking ff v0.8.0
+    Checking ethbloom v0.12.1
+    Checking prost v0.12.6
+    Checking solana-system-interface v1.0.0
+    Checking rustls-webpki v0.100.1
+    Checking test_helpers v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_bitcoin/test_helpers)
+    Checking nibble_vec v0.1.0
+   Compiling prometheus-client-derive-encode v0.4.1
+   Compiling metrics-macros v0.7.0
+    Checking socket2 v0.3.19
+    Checking smol v0.1.18
+    Checking metrics v0.21.0
+    Checking radix_trie v0.2.1
+    Checking prometheus-client v0.21.1
+    Checking trust-dns-resolver v0.22.0
+    Checking serialization v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_bitcoin/serialization)
+    Checking webpki-roots v0.23.1
+    Checking quanta v0.11.1
+    Checking ethereum-types v0.13.1
+    Checking group v0.8.0
+    Checking snow v0.9.6
+    Checking if-watch v3.2.1
+    Checking yamux v0.13.1
+    Checking yamux v0.12.1
+    Checking sha3 v0.9.1
+    Checking lru v0.10.1
+    Checking hashlink v0.8.2
+    Checking futures-rustls v0.22.1
+    Checking soketto v0.7.0
+    Checking x25519-dalek v1.1.0
+    Checking futures-ticker v0.0.3
+    Checking cuckoofilter v0.5.0
+    Checking groestl v0.9.0
+    Checking socket2 v0.5.3
+    Checking metrics-util v0.15.0
+    Checking libp2p-tcp v0.40.0 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking bitcrypto v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_bitcoin/crypto)
+    Checking rusqlite v0.28.0
+    Checking libp2p-gossipsub v0.45.0 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking async-std v1.6.2
+    Checking libp2p-websocket v0.42.0 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking libp2p-floodsub v0.43.0 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking libp2p-noise v0.43.0 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking libp2p-identify v0.43.0 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking libp2p-yamux v0.44.0 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking libp2p-dns v0.40.0 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking solana-epoch-schedule v2.2.1
+    Checking mm2_event_stream v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_event_stream)
+    Checking cbc v0.1.2
+    Checking libp2p-allow-block-list v0.2.0 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking libp2p-request-response v0.25.0 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking libp2p-connection-limits v0.2.0 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking libp2p-ping v0.43.0 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking tokio-rustls v0.23.2
+    Checking der v0.7.8
+    Checking libp2p v0.52.1 (https://github.com/KomodoPlatform/rust-libp2p.git?tag=k-0.52.12#8bcc1fda)
+    Checking bv v0.11.1
+   Compiling serialization_derive v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_bitcoin/serialization_derive)
+    Checking metrics-exporter-prometheus v0.12.1
+    Checking pairing v0.18.0
+    Checking solana-cpi v2.2.1
+    Checking ed25519-dalek v2.1.1
+    Checking solana-clock v2.2.2
+    Checking aes v0.8.3
+    Checking solana-serialize-utils v2.2.1
+    Checking sql-builder v3.1.1
+    Checking crypto-mac v0.11.0
+    Checking ff v0.13.0
+    Checking ethkey v0.3.0 (https://github.com/KomodoPlatform/mm2-parity-ethereum.git?rev=mm2-v2.1.1#d5524212)
+    Checking group v0.13.0
+    Checking sec1 v0.7.3
+    Checking solana-instructions-sysvar v2.2.2
+    Checking hmac v0.11.0
+    Checking db_common v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/db_common)
+    Checking solana-stake-interface v1.2.1
+    Checking mm2_metrics v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_metrics)
+    Checking chain v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_bitcoin/chain)
+    Checking solana-slot-history v2.2.1
+    Checking mm2_io v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_io)
+    Checking keys v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_bitcoin/keys)
+    Checking solana-program-entrypoint v2.3.0
+    Checking solana-epoch-rewards v2.2.1
+    Checking solana-last-restart-slot v2.2.1
+    Checking solana-rent v2.2.1
+    Checking timed-map v1.5.0
+    Checking solana-slot-hashes v2.2.1
+    Checking solana-transaction-error v2.2.1
+    Checking solana-fee-calculator v2.2.1
+    Checking serde-big-array v0.5.1
+    Checking crypto-bigint v0.5.5
+   Compiling num-derive v0.4.2
+    Checking shared_ref_counter v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/common/shared_ref_counter)
+    Checking mm2_core v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_core)
+    Checking elliptic-curve v0.13.8
+   Compiling relay_rpc v0.1.0 (https://github.com/komodoplatform/walletconnectrust?tag=k-0.1.3#e2fb03ac)
+    Checking solana-sysvar v2.3.0
+    Checking tungstenite v0.16.0
+    Checking solana-signature v2.3.0
+    Checking hkd32 v0.6.0
+    Checking bls12_381 v0.3.1
+    Checking spki v0.7.3
+    Checking libusb1-sys v0.5.0
+   Compiling strum_macros v0.26.4
+    Checking prost-types v0.12.6
+    Checking rfc6979 v0.4.0
+    Checking simple_asn1 v0.6.2
+    Checking universal-hash v0.5.1
+    Checking subtle-encoding v0.5.1
+    Checking curve25519-dalek-ng v4.1.1
+    Checking strum v0.26.3
+    Checking tendermint-proto v0.35.0
+    Checking poly1305 v0.8.0
+    Checking jsonwebtoken v8.3.0
+    Checking ecdsa v0.16.9
+    Checking jubjub v0.5.1
+    Checking rusb v0.7.0
+    Checking bip32 v0.2.2
+    Checking fpe v0.6.1
+    Checking tokio-tungstenite v0.16.1
+    Checking num-rational v0.4.0
+    Checking solana-signer v2.2.1
+    Checking zcash_note_encryption v0.0.0 (https://github.com/komodoplatform/librustzcash.git?tag=k-1.4.2#4e030a0f)
+    Checking script v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_bitcoin/script)
+    Checking keccak-hash v0.9.0
+    Checking chacha20 v0.9.1
+    Checking bigdecimal v0.3.0
+   Compiling prost-derive v0.14.1
+    Checking solana-bincode v2.2.1
+    Checking serde-aux v4.5.0
+    Checking solana-short-vec v2.2.1
+    Checking aead v0.5.2
+   Compiling async-stream-impl v0.3.3
+   Compiling trezor v0.1.1 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/trezor)
+    Checking base64ct v1.5.1
+    Checking password-hash v0.5.0
+   Compiling darling_core v0.21.3
+    Checking ethcore-transaction v0.1.0 (https://github.com/KomodoPlatform/mm2-parity-ethereum.git?rev=mm2-v2.1.1#d5524212)
+    Checking async-stream v0.3.3
+    Checking chacha20poly1305 v0.10.1
+    Checking solana-message v2.4.0
+    Checking prost v0.14.1
+    Checking mm2_number v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_number)
+    Checking zcash_primitives v0.5.0 (https://github.com/komodoplatform/librustzcash.git?tag=k-1.4.2#4e030a0f)
+    Checking rpc v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_bitcoin/rpc)
+    Checking tokio-tungstenite-wasm v0.1.1-alpha.0 (https://github.com/KomodoPlatform/tokio-tungstenite-wasm?rev=8fc7e2f#8fc7e2ff)
+    Checking hw_common v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/hw_common)
+    Checking k256 v0.13.2
+    Checking ed25519-consensus v2.1.0
+   Compiling prettyplease v0.2.15
+    Checking solana-account v2.2.1
+    Checking rpc_task v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/rpc_task)
+   Compiling enum_derives v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/derives/enum_derives)
+    Checking serde_qs v0.10.1
+    Checking http v1.1.0
+    Checking toml_datetime v0.6.8
+    Checking serde_spanned v0.6.8
+    Checking blake2 v0.10.6
+    Checking ripemd v0.1.3
+   Compiling serde_repr v0.1.6
+   Compiling thiserror-impl v2.0.15
+    Checking ed25519-dalek-bip32 v0.3.0
+   Compiling prost-build v0.12.6
+    Checking thiserror v2.0.15
+    Checking toml_edit v0.22.20
+    Checking tendermint v0.35.0
+    Checking relay_client v0.1.0 (https://github.com/komodoplatform/walletconnectrust?tag=k-0.1.3#e2fb03ac)
+    Checking argon2 v0.5.2
+   Compiling enum-primitive-derive v0.2.2
+warning: type alias `StaticAddressBytes` is never used
+  --> mm2src/trezor/src/eth/eth_command.rs:27:6
+   |
+27 | type StaticAddressBytes = &'static [u8];
+   |      ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling darling_macro v0.21.3
+warning: `trezor` (lib) generated 1 warning
+    Checking solana-transaction v2.2.3
+    Checking wc_common v0.1.0 (https://github.com/komodoplatform/walletconnectrust?tag=k-0.1.3#e2fb03ac)
+    Checking bip39 v2.2.0
+    Checking pbkdf2 v0.11.0
+   Compiling peg-macros v0.8.4
+    Checking crypto v1.0.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/crypto)
+    Checking agave-feature-set v2.3.7
+    Checking solana-seed-phrase v2.2.1
+    Checking zcash_client_backend v0.5.0 (https://github.com/komodoplatform/librustzcash.git?tag=k-1.4.2#4e030a0f)
+   Compiling num_enum_derive v0.7.4
+    Checking pairing_api v0.1.0 (https://github.com/komodoplatform/walletconnectrust?tag=k-0.1.3#e2fb03ac)
+   Compiling darling v0.21.3
+    Checking axum-core v0.3.4
+    Checking toml v0.8.19
+   Compiling tonic-build v0.10.2
+    Checking tower v0.4.13
+    Checking solana-account-decoder-client-types v2.3.7
+    Checking solana-transaction-context v2.3.7
+    Checking mm2_net v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_net)
+    Checking hyper-rustls v0.23.0
+    Checking sha3 v0.10.8
+    Checking hkdf v0.12.4
+    Checking webpki-roots v0.22.3
+    Checking serde_urlencoded v0.7.1
+    Checking tokio-io-timeout v1.2.0
+    Checking x25519-dalek v2.0.1
+    Checking futures-cpupool v0.1.8
+    Checking solana-commitment-config v2.2.1
+    Checking solana-reward-info v2.2.1
+    Checking solana-serde-varint v2.2.2
+    Checking dirs-sys v0.3.6
+    Checking mm2_db v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_db)
+    Checking sync_wrapper v0.1.1
+    Checking directories v3.0.2
+    Checking axum v0.6.20
+    Checking kdf_walletconnect v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/kdf_walletconnect)
+    Checking peg v0.8.4
+    Checking solana-transaction-status-client-types v2.3.7
+    Checking flate2 v1.0.22
+    Checking solana-version v2.3.7
+    Checking bellman v0.8.1
+    Checking hyper-timeout v0.4.1
+    Checking reqwest v0.11.9
+    Checking rmp-serde v0.14.4
+    Checking ethabi v17.2.0
+   Compiling coins v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/coins)
+    Checking tendermint-config v0.35.0
+    Checking num_enum v0.7.4
+   Compiling serde_with_macros v3.14.1
+    Checking zcash_extras v0.1.0 (https://github.com/komodoplatform/librustzcash.git?tag=k-1.4.2#4e030a0f)
+    Checking solana-keypair v2.2.3
+    Checking mm2_rpc v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_rpc)
+    Checking cosmos-sdk-proto v0.21.1
+    Checking solana-program-pack v2.2.1
+    Checking futures-rustls v0.24.0
+    Checking jsonrpc-core v18.0.0
+    Checking spl-generic-token v1.0.1
+    Checking tokio-stream v0.1.17
+    Checking spl-token v8.0.0
+    Checking solana-rpc-client-types v2.3.7
+    Checking tonic v0.10.2
+    Checking cosmrs v0.16.0
+    Checking web3 v0.19.0 (https://github.com/komodoplatform/rust-web3?tag=v0.20.0#01de1d73)
+    Checking mm2_p2p v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_p2p)
+    Checking serde_with v3.14.1
+    Checking solana-system-transaction v2.2.1
+    Checking zcash_client_sqlite v0.3.0 (https://github.com/komodoplatform/librustzcash.git?tag=k-1.4.2#4e030a0f)
+    Checking tendermint-rpc v0.35.0
+    Checking sia-rust v0.1.0 (https://github.com/KomodoPlatform/sia-rust?branch=refactor%2Frc-cleanup#934e4d03)
+    Checking zcash_proofs v0.5.0 (https://github.com/komodoplatform/librustzcash.git?tag=k-1.4.2#4e030a0f)
+    Checking utxo_signer v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/coins/utxo_signer)
+    Checking spv_validation v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_bitcoin/spv_validation)
+    Checking proxy_signature v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/proxy_signature)
+    Checking lightning-invoice v0.21.0
+    Checking lightning-net-tokio v0.0.113
+    Checking spl-associated-token-account-client v2.0.0
+    Checking mm2_state_machine v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_state_machine)
+   Compiling mocktopus_macros v0.7.11
+    Checking mm2_test_helpers v0.1.0 (<HOME>/kdf-mintlayer-baseline.huTFt0/source/mm2src/mm2_test_helpers)
+    Checking mocktopus v0.8.0
+error: format width has no effect on the output for this format trait
+  --> mm2src/coins/eth/eth_utils.rs:94:17
+   |
+94 |     Ok(format!("{addr:#02x}"))
+   |                 ^^^^^^^^^^^
+   |
+   = help: consider removing the width or increasing it to at least 4
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unused_format_specs
+   = note: `-D clippy::unused-format-specs` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::unused_format_specs)]`
+
+error: format width has no effect on the output for this format trait
+    --> mm2src/coins/eth.rs:1167:31
+     |
+1167 |             .join(format!("{}_{:#02x}_trace.json", self.ticker, my_address))
+     |                               ^^^^^^^
+     |
+     = help: consider removing the width or increasing it to at least 4
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unused_format_specs
+
+error: format width has no effect on the output for this format trait
+    --> mm2src/coins/eth.rs:1209:31
+     |
+1209 |             .join(format!("{}_{:#02x}_events.json", self.ticker, my_address))
+     |                               ^^^^^^^
+     |
+     = help: consider removing the width or increasing it to at least 4
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unused_format_specs
+
+error: format width has no effect on the output for this format trait
+    --> mm2src/coins/eth.rs:3013:30
+     |
+3013 |             } => Ok(format!("{:#02x}", key_pair.secret())),
+     |                              ^^^^^^^
+     |
+     = help: consider removing the width or increasing it to at least 4
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unused_format_specs
+
+error: redundant reference in `debug!` argument
+    --> mm2src/coins/eth.rs:3319:80
+     |
+3319 |                     debug!("Could not get client version on: {:?}. Error: {}", &client, rpc_error);
+     |                                                                                ^^^^^^^ help: remove the redundant `&`: `client`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_borrows_in_formatting
+     = note: `-D clippy::useless-borrows-in-formatting` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::useless_borrows_in_formatting)]`
+
+error: redundant reference in `debug!` argument
+    --> mm2src/coins/eth.rs:3328:25
+     |
+3328 |                         &client, timeout_error
+     |                         ^^^^^^^ help: remove the redundant `&`: `client`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_borrows_in_formatting
+
+error: consider using `sort_by_key`
+    --> mm2src/coins/eth.rs:3645:13
+     |
+3645 |             saved_traces.traces.sort_by(|a, b| b.block_number.cmp(&a.block_number));
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+     = note: `-D clippy::unnecessary-sort-by` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::unnecessary_sort_by)]`
+help: try
+     |
+3645 -             saved_traces.traces.sort_by(|a, b| b.block_number.cmp(&a.block_number));
+3645 +             saved_traces.traces.sort_by_key(|b| std::cmp::Reverse(b.block_number));
+     |
+
+error: consider using `sort_by_key`
+    --> mm2src/coins/eth.rs:4010:13
+     |
+4010 |             all_events.sort_by(|a, b| b.block_number.unwrap().cmp(&a.block_number.unwrap()));
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+help: try
+     |
+4010 -             all_events.sort_by(|a, b| b.block_number.unwrap().cmp(&a.block_number.unwrap()));
+4010 +             all_events.sort_by_key(|b| std::cmp::Reverse(b.block_number.unwrap()));
+     |
+
+error: redundant reference in `format!` argument
+    --> mm2src/coins/eth.rs:5326:21
+     |
+5326 |                     &coin.coin_type
+     |                     ^^^^^^^^^^^^^^^ help: remove the redundant `&`: `coin.coin_type`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_borrows_in_formatting
+
+error: consider using `sort_by_key`
+   --> mm2src/coins/lightning/ln_platform.rs:496:9
+    |
+496 |         transactions_to_confirm.sort_by(|a, b| (a.height, a.index).cmp(&(b.height, b.index)));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+help: try
+    |
+496 -         transactions_to_confirm.sort_by(|a, b| (a.height, a.index).cmp(&(b.height, b.index)));
+496 +         transactions_to_confirm.sort_by_key(|a| (a.height, a.index));
+    |
+
+error: this `if` can be collapsed into the outer `match`
+   --> mm2src/coins/my_tx_history_v2.rs:485:21
+    |
+485 | /                     if details.coin != request.coin {
+486 | |                         details.coin = request.coin.clone();
+487 | |                     }
+    | |_____________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#collapsible_match
+    = note: `-D clippy::collapsible-match` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::collapsible_match)]`
+help: collapse nested if block
+    |
+479 ~                 BCH_COIN_PROTOCOL_TYPE | BCH_TOKEN_PROTOCOL_TYPE
+480 |                     // SLP tokens are part of BCH transactions and SLP transactions might be stored with the BCH ticker.
+...
+484 |                     // Original PR: https://github.com/KomodoPlatform/komodo-defi-framework/pull/1175.
+485 ~                     if details.coin != request.coin => {
+486 |                         details.coin = request.coin.clone();
+487 ~                     },
+    |
+
+error: iterating on a map's values
+   --> mm2src/coins/qrc20/history.rs:177:53
+    |
+177 |               let to_write: Vec<TransactionDetails> = history_map
+    |  _____________________________________________________^
+178 | |                 .iter()
+179 | |                 .flat_map(|(_, value)| value)
+    | |_____________________________________________^ help: try: `history_map.values().flatten()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#iter_kv_map
+    = note: `-D clippy::iter-kv-map` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::iter_kv_map)]`
+
+error: explicit call to `.into_iter()` in function argument accepting `IntoIterator`
+   --> mm2src/coins/qrc20/history.rs:221:28
+    |
+221 |             details.extend(log_details.into_iter())
+    |                            ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: this parameter accepts any `IntoIterator`, so you don't need to call `.into_iter()`
+   --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/iter/traits/collect.rs:416:17
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_conversion
+    = note: `-D clippy::useless-conversion` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::useless_conversion)]`
+help: consider removing the `.into_iter()`
+    |
+221 -             details.extend(log_details.into_iter())
+221 +             details.extend(log_details)
+    |
+
+error: iterating on a map's values
+   --> mm2src/coins/qrc20/history.rs:396:27
+    |
+396 |           let need_update = history
+    |  ___________________________^
+397 | |             .iter()
+398 | |             .flat_map(|(_, txs)| txs)
+    | |_____________________________________^ help: try: `history.values().flatten()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#iter_kv_map
+
+error: redundant reference in `debug!` argument
+   --> mm2src/coins/tendermint/tendermint_coin.rs:387:81
+    |
+387 |                     debug!("Could not perform healthcheck on: {:?}. Error: {}", &client, rpc_error);
+    |                                                                                 ^^^^^^^ help: remove the redundant `&`: `client`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_borrows_in_formatting
+
+error: redundant reference in `debug!` argument
+   --> mm2src/coins/tendermint/tendermint_coin.rs:390:78
+    |
+390 |                     debug!("Healthcheck timeout exceed on: {:?}. Error: {}", &client, timeout_error);
+    |                                                                              ^^^^^^^ help: remove the redundant `&`: `client`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_borrows_in_formatting
+
+error: redundant reference in `debug!` argument
+   --> mm2src/coins/tendermint/tendermint_tx_history_v2.rs:844:100
+    |
+844 | ...                   log::debug!("Could not read transaction fee for tx '{}', skipping it", &tx_hash);
+    |                                                                                              ^^^^^^^^ help: remove the redundant `&`: `tx_hash`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_borrows_in_formatting
+
+error: redundant reference in `debug!` argument
+   --> mm2src/coins/tendermint/tendermint_tx_history_v2.rs:856:29
+    |
+856 | ...                   &tx_hash
+    |                       ^^^^^^^^ help: remove the redundant `&`: `tx_hash`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_borrows_in_formatting
+
+error: redundant reference in `debug!` argument
+   --> mm2src/coins/tendermint/tendermint_tx_history_v2.rs:916:95
+    |
+916 | ...                   log::debug!("Tx '{}' already exists in tx_history. Skipping it.", &tx_hash);
+    |                                                                                         ^^^^^^^^ help: remove the redundant `&`: `tx_hash`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_borrows_in_formatting
+
+error: consider using `sort_by_key`
+  --> mm2src/coins/siacoin/sia_withdraw.rs:51:9
+   |
+51 |         unspent_outputs.sort_by(|a, b| b.siacoin_output.value.0.cmp(&a.siacoin_output.value.0));
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+help: try
+   |
+51 -         unspent_outputs.sort_by(|a, b| b.siacoin_output.value.0.cmp(&a.siacoin_output.value.0));
+51 +         unspent_outputs.sort_by_key(|b| std::cmp::Reverse(b.siacoin_output.value.0));
+   |
+
+error: consider using `sort_by_key`
+   --> mm2src/coins/utxo/bch.rs:355:9
+    |
+355 |         slp_unspents.sort_by(|a, b| a.slp_amount.cmp(&b.slp_amount));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+help: try
+    |
+355 -         slp_unspents.sort_by(|a, b| a.slp_amount.cmp(&b.slp_amount));
+355 +         slp_unspents.sort_by_key(|a| a.slp_amount);
+    |
+
+error: consider using `sort_by_key`
+   --> mm2src/coins/utxo/bch.rs:375:9
+    |
+375 |         slp_unspents.sort_by(|a, b| a.slp_amount.cmp(&b.slp_amount));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+help: try
+    |
+375 -         slp_unspents.sort_by(|a, b| a.slp_amount.cmp(&b.slp_amount));
+375 +         slp_unspents.sort_by_key(|a| a.slp_amount);
+    |
+
+error: format width has no effect on the output for this format trait
+    --> mm2src/coins/utxo/qtum.rs:1368:17
+     |
+1368 |     Ok(format!("{address:#02x}"))
+     |                 ^^^^^^^^^^^^^^
+     |
+     = help: consider removing the width or increasing it to at least 4
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unused_format_specs
+
+error: the variable `starting_height` is used as a loop counter
+   --> mm2src/coins/utxo/rpc_clients/electrum_rpc/client.rs:804:25
+    |
+804 |                         for block_header in &block_headers {
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using: `for (starting_height, block_header) in (from_height..).zip(block_headers.iter())`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#explicit_counter_loop
+    = note: `-D clippy::explicit-counter-loop` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::explicit_counter_loop)]`
+
+error: redundant reference in `format!` argument
+   --> mm2src/coins/utxo/rpc_clients/electrum_rpc/client.rs:849:17
+    |
+849 |                 &selfi.coin_ticker, erroneous_responses
+    |                 ^^^^^^^^^^^^^^^^^^ help: remove the redundant `&`: `selfi.coin_ticker`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_borrows_in_formatting
+
+error: iterating on a map's values
+   --> mm2src/coins/utxo/rpc_clients/electrum_rpc/connection_manager/manager.rs:217:9
+    |
+217 | /         self.read_maintained_connections()
+218 | |             .iter()
+219 | |             .filter_map(|(_id, address)| self.get_connection(address))
+    | |______________________________________________________________________^ help: try: `self.read_maintained_connections().values().filter_map(|address| self.get_connection(address))`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#iter_kv_map
+
+error: explicit call to `.into_iter()` in function argument accepting `IntoIterator`
+    --> mm2src/coins/utxo/utxo_common.rs:3299:25
+     |
+3299 |         unspents.extend(loaded_unspents.into_iter());
+     |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+note: this parameter accepts any `IntoIterator`, so you don't need to call `.into_iter()`
+    --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/iter/traits/collect.rs:416:17
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_conversion
+help: consider removing the `.into_iter()`
+     |
+3299 -         unspents.extend(loaded_unspents.into_iter());
+3299 +         unspents.extend(loaded_unspents);
+     |
+
+error: explicit call to `.into_iter()` in function argument accepting `IntoIterator`
+    --> mm2src/coins/utxo/utxo_common.rs:4121:31
+     |
+4121 |         from_addresses.extend(from.into_iter());
+     |                               ^^^^^^^^^^^^^^^^
+     |
+note: this parameter accepts any `IntoIterator`, so you don't need to call `.into_iter()`
+    --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/iter/traits/collect.rs:416:17
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_conversion
+help: consider removing the `.into_iter()`
+     |
+4121 -         from_addresses.extend(from.into_iter());
+4121 +         from_addresses.extend(from);
+     |
+
+error: explicit call to `.into_iter()` in function argument accepting `IntoIterator`
+    --> mm2src/coins/utxo/utxo_common.rs:4130:29
+     |
+4130 |         to_addresses.extend(to.into_iter());
+     |                             ^^^^^^^^^^^^^^
+     |
+note: this parameter accepts any `IntoIterator`, so you don't need to call `.into_iter()`
+    --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/iter/traits/collect.rs:416:17
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_conversion
+help: consider removing the `.into_iter()`
+     |
+4130 -         to_addresses.extend(to.into_iter());
+4130 +         to_addresses.extend(to);
+     |
+
+error: you seem to want to iterate on a map's values
+    --> mm2src/coins/utxo/utxo_common.rs:5156:33
+     |
+5156 |     for (_address, unspents) in unspents_map.iter_mut() {
+     |                                 ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#for_kv_map
+     = note: `-D clippy::for-kv-map` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::for_kv_map)]`
+help: use the corresponding method
+     |
+5156 -     for (_address, unspents) in unspents_map.iter_mut() {
+5156 +     for unspents in unspents_map.values_mut() {
+     |
+
+error: consider using `sort_unstable_by_key`
+    --> mm2src/coins/utxo.rs:1788:5
+     |
+1788 |     unspents.sort_unstable_by(|x, y| y.value.cmp(&x.value));
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+help: try
+     |
+1788 -     unspents.sort_unstable_by(|x, y| y.value.cmp(&x.value));
+1788 +     unspents.sort_unstable_by_key(|y| std::cmp::Reverse(y.value));
+     |
+
+error: format width has no effect on the output for this format trait
+   --> mm2src/coins/nft.rs:132:39
+    |
+132 |         .get_nft(&req.chain, format!("{:#02x}", req.token_address), req.token_id.clone())
+    |                                       ^^^^^^^
+    |
+    = help: consider removing the width or increasing it to at least 4
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unused_format_specs
+
+error: format width has no effect on the output for this format trait
+   --> mm2src/coins/nft.rs:136:37
+    |
+136 |             token_address: format!("{:#02x}", req.token_address),
+    |                                     ^^^^^^^
+    |
+    = help: consider removing the width or increasing it to at least 4
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unused_format_specs
+
+error: iterating on a map's values
+   --> mm2src/coins/z_coin/tx_history_events.rs:114:26
+    |
+114 |       let prev_tx_hashes = transactions
+    |  __________________________^
+115 | |         .iter()
+116 | |         .flat_map(|(_, tx)| {
+117 | |             tx.vin.iter().map(|vin| {
+...   |
+121 | |             })
+122 | |         })
+    | |__________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#iter_kv_map
+help: try
+    |
+114 ~     let prev_tx_hashes = transactions.values().flat_map(|tx| {
+115 +             tx.vin.iter().map(|vin| {
+116 +                 let mut hash = *vin.prevout.hash();
+117 +                 hash.reverse();
+118 +                 H256Json::from(hash)
+119 +             })
+120 +         })
+    |
+
+error: consider using `sort_unstable_by_key`
+   --> mm2src/coins/z_coin.rs:386:9
+    |
+386 |         unspents.sort_unstable_by(|a, b| a.note_value.cmp(&b.note_value));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+help: try
+    |
+386 -         unspents.sort_unstable_by(|a, b| a.note_value.cmp(&b.note_value));
+386 +         unspents.sort_unstable_by_key(|a| a.note_value);
+    |
+
+error: iterating on a map's values
+   --> mm2src/coins/z_coin.rs:690:42
+    |
+690 |           let prev_tx_hashes: HashSet<_> = transactions
+    |  __________________________________________^
+691 | |             .iter()
+692 | |             .flat_map(|(_, tx)| {
+693 | |                 tx.vin.iter().map(|vin| {
+...   |
+697 | |                 })
+698 | |             })
+    | |______________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#iter_kv_map
+help: try
+    |
+690 ~         let prev_tx_hashes: HashSet<_> = transactions.values().flat_map(|tx| {
+691 +                 tx.vin.iter().map(|vin| {
+692 +                     let mut hash = *vin.prevout.hash();
+693 +                     hash.reverse();
+694 +                     H256Json::from(hash)
+695 +                 })
+696 +             })
+    |
+
+error: could not compile `coins` (lib) due to 36 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: consider using `sort_by_key`
+   --> mm2src/coins/hd_wallet/storage/mod.rs:416:9
+    |
+416 |         actual.sort_by(|x, y| x.account_id.cmp(&y.account_id));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+help: try
+    |
+416 -         actual.sort_by(|x, y| x.account_id.cmp(&y.account_id));
+416 +         actual.sort_by_key(|x| x.account_id);
+    |
+
+error: consider using `sort_by_key`
+    --> mm2src/coins/lightning/ln_sql.rs:1375:9
+     |
+1375 |         payments.sort_by(|a, b| b.last_updated.cmp(&a.last_updated));
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+help: try
+     |
+1375 -         payments.sort_by(|a, b| b.last_updated.cmp(&a.last_updated));
+1375 +         payments.sort_by_key(|b| std::cmp::Reverse(b.last_updated));
+     |
+
+error: could not compile `coins` (lib test) due to 38 previous errors

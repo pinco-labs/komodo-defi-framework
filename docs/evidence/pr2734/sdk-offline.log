@@ -1,0 +1,31 @@
+warning: type alias `StaticAddressBytes` is never used
+  --> mm2src/trezor/src/eth/eth_command.rs:27:6
+   |
+27 | type StaticAddressBytes = &'static [u8];
+   |      ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `trezor` (lib) generated 1 warning
+   Compiling coins v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/coins)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 32s
+warning: the following packages contain code that will be rejected by a future version of Rust: nom v6.1.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running tests/mintlayer_kdf_sdk_key_adapter.rs (<HOME>/kdf-mintlayer-native-swaps/target/debug/deps/mintlayer_kdf_sdk_key_adapter-cd755629fe02c9df)
+
+running 1 test
+test kdf_key_adapter_preserves_public_key_address_and_signatures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/mintlayer_sdk_offline_transaction.rs (<HOME>/kdf-mintlayer-native-swaps/target/debug/deps/mintlayer_sdk_offline_transaction-169d2127847c072e)
+
+running 5 tests
+test build_sign_serialize_and_decode_mainnet_transaction_offline ... ok
+test converges_canonical_fee_from_serialized_transaction_size_offline ... ok
+test sdk_size_estimator_is_conservative_across_transaction_shapes ... ok
+test select_api_utxo_build_sign_and_decode_with_change_offline ... ok
+test plans_single_input_change_boundaries_offline ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+

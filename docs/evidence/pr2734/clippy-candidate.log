@@ -1,0 +1,477 @@
+warning: type alias `StaticAddressBytes` is never used
+  --> mm2src/trezor/src/eth/eth_command.rs:27:6
+   |
+27 | type StaticAddressBytes = &'static [u8];
+   |      ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `trezor` (lib) generated 1 warning
+    Checking coins v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/coins)
+error: format width has no effect on the output for this format trait
+  --> mm2src/coins/eth/eth_utils.rs:94:17
+   |
+94 |     Ok(format!("{addr:#02x}"))
+   |                 ^^^^^^^^^^^
+   |
+   = help: consider removing the width or increasing it to at least 4
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unused_format_specs
+   = note: `-D clippy::unused-format-specs` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::unused_format_specs)]`
+
+error: format width has no effect on the output for this format trait
+    --> mm2src/coins/eth.rs:1167:31
+     |
+1167 |             .join(format!("{}_{:#02x}_trace.json", self.ticker, my_address))
+     |                               ^^^^^^^
+     |
+     = help: consider removing the width or increasing it to at least 4
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unused_format_specs
+
+error: format width has no effect on the output for this format trait
+    --> mm2src/coins/eth.rs:1209:31
+     |
+1209 |             .join(format!("{}_{:#02x}_events.json", self.ticker, my_address))
+     |                               ^^^^^^^
+     |
+     = help: consider removing the width or increasing it to at least 4
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unused_format_specs
+
+error: format width has no effect on the output for this format trait
+    --> mm2src/coins/eth.rs:3013:30
+     |
+3013 |             } => Ok(format!("{:#02x}", key_pair.secret())),
+     |                              ^^^^^^^
+     |
+     = help: consider removing the width or increasing it to at least 4
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unused_format_specs
+
+error: redundant reference in `debug!` argument
+    --> mm2src/coins/eth.rs:3319:80
+     |
+3319 |                     debug!("Could not get client version on: {:?}. Error: {}", &client, rpc_error);
+     |                                                                                ^^^^^^^ help: remove the redundant `&`: `client`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_borrows_in_formatting
+     = note: `-D clippy::useless-borrows-in-formatting` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::useless_borrows_in_formatting)]`
+
+error: redundant reference in `debug!` argument
+    --> mm2src/coins/eth.rs:3328:25
+     |
+3328 |                         &client, timeout_error
+     |                         ^^^^^^^ help: remove the redundant `&`: `client`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_borrows_in_formatting
+
+error: consider using `sort_by_key`
+    --> mm2src/coins/eth.rs:3645:13
+     |
+3645 |             saved_traces.traces.sort_by(|a, b| b.block_number.cmp(&a.block_number));
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+     = note: `-D clippy::unnecessary-sort-by` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::unnecessary_sort_by)]`
+help: try
+     |
+3645 -             saved_traces.traces.sort_by(|a, b| b.block_number.cmp(&a.block_number));
+3645 +             saved_traces.traces.sort_by_key(|b| std::cmp::Reverse(b.block_number));
+     |
+
+error: consider using `sort_by_key`
+    --> mm2src/coins/eth.rs:4010:13
+     |
+4010 |             all_events.sort_by(|a, b| b.block_number.unwrap().cmp(&a.block_number.unwrap()));
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+help: try
+     |
+4010 -             all_events.sort_by(|a, b| b.block_number.unwrap().cmp(&a.block_number.unwrap()));
+4010 +             all_events.sort_by_key(|b| std::cmp::Reverse(b.block_number.unwrap()));
+     |
+
+error: redundant reference in `format!` argument
+    --> mm2src/coins/eth.rs:5326:21
+     |
+5326 |                     &coin.coin_type
+     |                     ^^^^^^^^^^^^^^^ help: remove the redundant `&`: `coin.coin_type`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_borrows_in_formatting
+
+error: consider using `sort_by_key`
+   --> mm2src/coins/lightning/ln_platform.rs:496:9
+    |
+496 |         transactions_to_confirm.sort_by(|a, b| (a.height, a.index).cmp(&(b.height, b.index)));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+help: try
+    |
+496 -         transactions_to_confirm.sort_by(|a, b| (a.height, a.index).cmp(&(b.height, b.index)));
+496 +         transactions_to_confirm.sort_by_key(|a| (a.height, a.index));
+    |
+
+error: this `if` can be collapsed into the outer `match`
+   --> mm2src/coins/my_tx_history_v2.rs:485:21
+    |
+485 | /                     if details.coin != request.coin {
+486 | |                         details.coin = request.coin.clone();
+487 | |                     }
+    | |_____________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#collapsible_match
+    = note: `-D clippy::collapsible-match` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::collapsible_match)]`
+help: collapse nested if block
+    |
+479 ~                 BCH_COIN_PROTOCOL_TYPE | BCH_TOKEN_PROTOCOL_TYPE
+480 |                     // SLP tokens are part of BCH transactions and SLP transactions might be stored with the BCH ticker.
+...
+484 |                     // Original PR: https://github.com/KomodoPlatform/komodo-defi-framework/pull/1175.
+485 ~                     if details.coin != request.coin => {
+486 |                         details.coin = request.coin.clone();
+487 ~                     },
+    |
+
+error: iterating on a map's values
+   --> mm2src/coins/qrc20/history.rs:177:53
+    |
+177 |               let to_write: Vec<TransactionDetails> = history_map
+    |  _____________________________________________________^
+178 | |                 .iter()
+179 | |                 .flat_map(|(_, value)| value)
+    | |_____________________________________________^ help: try: `history_map.values().flatten()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#iter_kv_map
+    = note: `-D clippy::iter-kv-map` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::iter_kv_map)]`
+
+error: explicit call to `.into_iter()` in function argument accepting `IntoIterator`
+   --> mm2src/coins/qrc20/history.rs:221:28
+    |
+221 |             details.extend(log_details.into_iter())
+    |                            ^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: this parameter accepts any `IntoIterator`, so you don't need to call `.into_iter()`
+   --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/iter/traits/collect.rs:416:17
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_conversion
+    = note: `-D clippy::useless-conversion` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::useless_conversion)]`
+help: consider removing the `.into_iter()`
+    |
+221 -             details.extend(log_details.into_iter())
+221 +             details.extend(log_details)
+    |
+
+error: iterating on a map's values
+   --> mm2src/coins/qrc20/history.rs:396:27
+    |
+396 |           let need_update = history
+    |  ___________________________^
+397 | |             .iter()
+398 | |             .flat_map(|(_, txs)| txs)
+    | |_____________________________________^ help: try: `history.values().flatten()`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#iter_kv_map
+
+error: redundant reference in `debug!` argument
+   --> mm2src/coins/tendermint/tendermint_coin.rs:387:81
+    |
+387 |                     debug!("Could not perform healthcheck on: {:?}. Error: {}", &client, rpc_error);
+    |                                                                                 ^^^^^^^ help: remove the redundant `&`: `client`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_borrows_in_formatting
+
+error: redundant reference in `debug!` argument
+   --> mm2src/coins/tendermint/tendermint_coin.rs:390:78
+    |
+390 |                     debug!("Healthcheck timeout exceed on: {:?}. Error: {}", &client, timeout_error);
+    |                                                                              ^^^^^^^ help: remove the redundant `&`: `client`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_borrows_in_formatting
+
+error: redundant reference in `debug!` argument
+   --> mm2src/coins/tendermint/tendermint_tx_history_v2.rs:844:100
+    |
+844 | ...                   log::debug!("Could not read transaction fee for tx '{}', skipping it", &tx_hash);
+    |                                                                                              ^^^^^^^^ help: remove the redundant `&`: `tx_hash`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_borrows_in_formatting
+
+error: redundant reference in `debug!` argument
+   --> mm2src/coins/tendermint/tendermint_tx_history_v2.rs:856:29
+    |
+856 | ...                   &tx_hash
+    |                       ^^^^^^^^ help: remove the redundant `&`: `tx_hash`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_borrows_in_formatting
+
+error: redundant reference in `debug!` argument
+   --> mm2src/coins/tendermint/tendermint_tx_history_v2.rs:916:95
+    |
+916 | ...                   log::debug!("Tx '{}' already exists in tx_history. Skipping it.", &tx_hash);
+    |                                                                                         ^^^^^^^^ help: remove the redundant `&`: `tx_hash`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_borrows_in_formatting
+
+error: consider using `sort_by_key`
+  --> mm2src/coins/siacoin/sia_withdraw.rs:51:9
+   |
+51 |         unspent_outputs.sort_by(|a, b| b.siacoin_output.value.0.cmp(&a.siacoin_output.value.0));
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+help: try
+   |
+51 -         unspent_outputs.sort_by(|a, b| b.siacoin_output.value.0.cmp(&a.siacoin_output.value.0));
+51 +         unspent_outputs.sort_by_key(|b| std::cmp::Reverse(b.siacoin_output.value.0));
+   |
+
+error: consider using `sort_by_key`
+   --> mm2src/coins/utxo/bch.rs:355:9
+    |
+355 |         slp_unspents.sort_by(|a, b| a.slp_amount.cmp(&b.slp_amount));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+help: try
+    |
+355 -         slp_unspents.sort_by(|a, b| a.slp_amount.cmp(&b.slp_amount));
+355 +         slp_unspents.sort_by_key(|a| a.slp_amount);
+    |
+
+error: consider using `sort_by_key`
+   --> mm2src/coins/utxo/bch.rs:375:9
+    |
+375 |         slp_unspents.sort_by(|a, b| a.slp_amount.cmp(&b.slp_amount));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+help: try
+    |
+375 -         slp_unspents.sort_by(|a, b| a.slp_amount.cmp(&b.slp_amount));
+375 +         slp_unspents.sort_by_key(|a| a.slp_amount);
+    |
+
+error: format width has no effect on the output for this format trait
+    --> mm2src/coins/utxo/qtum.rs:1368:17
+     |
+1368 |     Ok(format!("{address:#02x}"))
+     |                 ^^^^^^^^^^^^^^
+     |
+     = help: consider removing the width or increasing it to at least 4
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unused_format_specs
+
+error: the variable `starting_height` is used as a loop counter
+   --> mm2src/coins/utxo/rpc_clients/electrum_rpc/client.rs:804:25
+    |
+804 |                         for block_header in &block_headers {
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using: `for (starting_height, block_header) in (from_height..).zip(block_headers.iter())`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#explicit_counter_loop
+    = note: `-D clippy::explicit-counter-loop` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::explicit_counter_loop)]`
+
+error: redundant reference in `format!` argument
+   --> mm2src/coins/utxo/rpc_clients/electrum_rpc/client.rs:849:17
+    |
+849 |                 &selfi.coin_ticker, erroneous_responses
+    |                 ^^^^^^^^^^^^^^^^^^ help: remove the redundant `&`: `selfi.coin_ticker`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_borrows_in_formatting
+
+error: iterating on a map's values
+   --> mm2src/coins/utxo/rpc_clients/electrum_rpc/connection_manager/manager.rs:217:9
+    |
+217 | /         self.read_maintained_connections()
+218 | |             .iter()
+219 | |             .filter_map(|(_id, address)| self.get_connection(address))
+    | |______________________________________________________________________^ help: try: `self.read_maintained_connections().values().filter_map(|address| self.get_connection(address))`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#iter_kv_map
+
+error: explicit call to `.into_iter()` in function argument accepting `IntoIterator`
+    --> mm2src/coins/utxo/utxo_common.rs:3299:25
+     |
+3299 |         unspents.extend(loaded_unspents.into_iter());
+     |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+note: this parameter accepts any `IntoIterator`, so you don't need to call `.into_iter()`
+    --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/iter/traits/collect.rs:416:17
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_conversion
+help: consider removing the `.into_iter()`
+     |
+3299 -         unspents.extend(loaded_unspents.into_iter());
+3299 +         unspents.extend(loaded_unspents);
+     |
+
+error: explicit call to `.into_iter()` in function argument accepting `IntoIterator`
+    --> mm2src/coins/utxo/utxo_common.rs:4121:31
+     |
+4121 |         from_addresses.extend(from.into_iter());
+     |                               ^^^^^^^^^^^^^^^^
+     |
+note: this parameter accepts any `IntoIterator`, so you don't need to call `.into_iter()`
+    --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/iter/traits/collect.rs:416:17
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_conversion
+help: consider removing the `.into_iter()`
+     |
+4121 -         from_addresses.extend(from.into_iter());
+4121 +         from_addresses.extend(from);
+     |
+
+error: explicit call to `.into_iter()` in function argument accepting `IntoIterator`
+    --> mm2src/coins/utxo/utxo_common.rs:4130:29
+     |
+4130 |         to_addresses.extend(to.into_iter());
+     |                             ^^^^^^^^^^^^^^
+     |
+note: this parameter accepts any `IntoIterator`, so you don't need to call `.into_iter()`
+    --> /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/core/src/iter/traits/collect.rs:416:17
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#useless_conversion
+help: consider removing the `.into_iter()`
+     |
+4130 -         to_addresses.extend(to.into_iter());
+4130 +         to_addresses.extend(to);
+     |
+
+error: you seem to want to iterate on a map's values
+    --> mm2src/coins/utxo/utxo_common.rs:5156:33
+     |
+5156 |     for (_address, unspents) in unspents_map.iter_mut() {
+     |                                 ^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#for_kv_map
+     = note: `-D clippy::for-kv-map` implied by `-D warnings`
+     = help: to override `-D warnings` add `#[allow(clippy::for_kv_map)]`
+help: use the corresponding method
+     |
+5156 -     for (_address, unspents) in unspents_map.iter_mut() {
+5156 +     for unspents in unspents_map.values_mut() {
+     |
+
+error: consider using `sort_unstable_by_key`
+    --> mm2src/coins/utxo.rs:1788:5
+     |
+1788 |     unspents.sort_unstable_by(|x, y| y.value.cmp(&x.value));
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+help: try
+     |
+1788 -     unspents.sort_unstable_by(|x, y| y.value.cmp(&x.value));
+1788 +     unspents.sort_unstable_by_key(|y| std::cmp::Reverse(y.value));
+     |
+
+error: format width has no effect on the output for this format trait
+   --> mm2src/coins/nft.rs:132:39
+    |
+132 |         .get_nft(&req.chain, format!("{:#02x}", req.token_address), req.token_id.clone())
+    |                                       ^^^^^^^
+    |
+    = help: consider removing the width or increasing it to at least 4
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unused_format_specs
+
+error: format width has no effect on the output for this format trait
+   --> mm2src/coins/nft.rs:136:37
+    |
+136 |             token_address: format!("{:#02x}", req.token_address),
+    |                                     ^^^^^^^
+    |
+    = help: consider removing the width or increasing it to at least 4
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unused_format_specs
+
+error: iterating on a map's values
+   --> mm2src/coins/z_coin/tx_history_events.rs:114:26
+    |
+114 |       let prev_tx_hashes = transactions
+    |  __________________________^
+115 | |         .iter()
+116 | |         .flat_map(|(_, tx)| {
+117 | |             tx.vin.iter().map(|vin| {
+...   |
+121 | |             })
+122 | |         })
+    | |__________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#iter_kv_map
+help: try
+    |
+114 ~     let prev_tx_hashes = transactions.values().flat_map(|tx| {
+115 +             tx.vin.iter().map(|vin| {
+116 +                 let mut hash = *vin.prevout.hash();
+117 +                 hash.reverse();
+118 +                 H256Json::from(hash)
+119 +             })
+120 +         })
+    |
+
+error: consider using `sort_unstable_by_key`
+   --> mm2src/coins/z_coin.rs:386:9
+    |
+386 |         unspents.sort_unstable_by(|a, b| a.note_value.cmp(&b.note_value));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+help: try
+    |
+386 -         unspents.sort_unstable_by(|a, b| a.note_value.cmp(&b.note_value));
+386 +         unspents.sort_unstable_by_key(|a| a.note_value);
+    |
+
+error: iterating on a map's values
+   --> mm2src/coins/z_coin.rs:690:42
+    |
+690 |           let prev_tx_hashes: HashSet<_> = transactions
+    |  __________________________________________^
+691 | |             .iter()
+692 | |             .flat_map(|(_, tx)| {
+693 | |                 tx.vin.iter().map(|vin| {
+...   |
+697 | |                 })
+698 | |             })
+    | |______________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#iter_kv_map
+help: try
+    |
+690 ~         let prev_tx_hashes: HashSet<_> = transactions.values().flat_map(|tx| {
+691 +                 tx.vin.iter().map(|vin| {
+692 +                     let mut hash = *vin.prevout.hash();
+693 +                     hash.reverse();
+694 +                     H256Json::from(hash)
+695 +                 })
+696 +             })
+    |
+
+error: could not compile `coins` (lib) due to 36 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: consider using `sort_by_key`
+   --> mm2src/coins/hd_wallet/storage/mod.rs:416:9
+    |
+416 |         actual.sort_by(|x, y| x.account_id.cmp(&y.account_id));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+help: try
+    |
+416 -         actual.sort_by(|x, y| x.account_id.cmp(&y.account_id));
+416 +         actual.sort_by_key(|x| x.account_id);
+    |
+
+error: consider using `sort_by_key`
+    --> mm2src/coins/lightning/ln_sql.rs:1375:9
+     |
+1375 |         payments.sort_by(|a, b| b.last_updated.cmp(&a.last_updated));
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+help: try
+     |
+1375 -         payments.sort_by(|a, b| b.last_updated.cmp(&a.last_updated));
+1375 +         payments.sort_by_key(|b| std::cmp::Reverse(b.last_updated));
+     |
+
+error: could not compile `coins` (lib test) due to 38 previous errors

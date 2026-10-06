@@ -1,0 +1,195 @@
+   Compiling common v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/common)
+   Compiling ser_error v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/derives/ser_error)
+   Compiling ser_error_derive v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/derives/ser_error_derive)
+   Compiling primitives v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_bitcoin/primitives)
+   Compiling test_helpers v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_bitcoin/test_helpers)
+   Compiling serialization v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_bitcoin/serialization)
+   Compiling bitcrypto v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_bitcoin/crypto)
+   Compiling mm2_err_handle v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_err_handle)
+   Compiling mm2_event_stream v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_event_stream)
+   Compiling serialization_derive v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_bitcoin/serialization_derive)
+   Compiling db_common v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/db_common)
+   Compiling chain v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_bitcoin/chain)
+   Compiling mm2_metrics v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_metrics)
+   Compiling mm2_io v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_io)
+   Compiling keys v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_bitcoin/keys)
+   Compiling shared_ref_counter v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/common/shared_ref_counter)
+   Compiling mm2_core v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_core)
+   Compiling script v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_bitcoin/script)
+   Compiling trezor v0.1.1 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/trezor)
+   Compiling mm2_number v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_number)
+   Compiling rpc v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_bitcoin/rpc)
+   Compiling hw_common v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/hw_common)
+   Compiling rpc_task v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/rpc_task)
+   Compiling enum_derives v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/derives/enum_derives)
+   Compiling mm2_net v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_net)
+warning: type alias `StaticAddressBytes` is never used
+  --> mm2src/trezor/src/eth/eth_command.rs:27:6
+   |
+27 | type StaticAddressBytes = &'static [u8];
+   |      ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `trezor` (lib) generated 1 warning
+   Compiling crypto v1.0.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/crypto)
+   Compiling mm2_db v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_db)
+   Compiling kdf_walletconnect v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/kdf_walletconnect)
+   Compiling coins v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/coins)
+   Compiling mm2_rpc v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_rpc)
+   Compiling mm2_p2p v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_p2p)
+   Compiling mm2_test_helpers v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_test_helpers)
+   Compiling utxo_signer v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/coins/utxo_signer)
+   Compiling spv_validation v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_bitcoin/spv_validation)
+   Compiling proxy_signature v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/proxy_signature)
+   Compiling mm2_state_machine v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/mm2_state_machine)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 03s
+warning: the following packages contain code that will be rejected by a future version of Rust: nom v6.1.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests lp_coins.rs (<HOME>/kdf-mintlayer-native-swaps/target/debug/deps/coins-48c023d896e6cc29)
+
+running 141 tests
+test mintlayer::address::tests::builds_testnet_internal_path ... ok
+test mintlayer::address::tests::builds_official_mainnet_receive_path ... ok
+test mintlayer::address::tests::network_coin_types_match_mintlayer_core ... ok
+test mintlayer::address::tests::network_hrps_match_mintlayer_core ... ok
+test mintlayer::address::tests::rejects_address_from_another_network ... ok
+test mintlayer::address::tests::rejects_incorrect_destination_payload_length ... ok
+test mintlayer::address::tests::official_mainnet_address_vector_matches_mintlayer_core ... ok
+test mintlayer::address::tests::rejects_incorrect_public_key_length ... ok
+test mintlayer::address::tests::rejects_invalid_compressed_public_key ... ok
+test mintlayer::address::tests::rejects_legacy_bech32_variant ... ok
+test mintlayer::address::tests::rejects_unsupported_destination_tag ... ok
+test mintlayer::address::tests::validates_official_mainnet_address ... ok
+test mintlayer::api_client::tests::address_not_found_returns_empty_address_info ... ok
+test mintlayer::api_client::tests::block_height_in_main_chain_accepts_matching_id_case_insensitively ... ok
+test mintlayer::api_client::tests::deserialize_chain_tip_from_first_endpoint ... ok
+test mintlayer::api_client::tests::block_height_in_main_chain_rejects_competing_block_at_same_height ... ok
+test mintlayer::api_client::tests::deserialize_genesis_from_first_endpoint ... ok
+test mintlayer::api_client::tests::fail_over_after_transport_error ... ok
+test mintlayer::api_client::tests::fail_over_after_unsuccessful_http_status ... ok
+test mintlayer::api_client::tests::fee_rate_fails_over_after_invalid_schema ... ok
+test mintlayer::api_client::tests::mixed_address_not_found_and_transport_failure_remains_an_error ... ok
+test mintlayer::api_client::tests::preserve_reverse_proxy_prefix ... ok
+test mintlayer::api_client::tests::reject_empty_address_without_requesting_endpoint ... ok
+test mintlayer::api_client::tests::report_invalid_json_after_all_endpoints_fail ... ok
+test mintlayer::api_client::tests::request_fee_rate ... ok
+test mintlayer::api_client::tests::request_spendable_utxos ... ok
+test mintlayer::api_client::tests::request_transaction_observation ... ok
+test mintlayer::api_client::tests::submit_transaction_posts_raw_hex_and_checks_txid ... ok
+test mintlayer::api_client::tests::submit_transaction_fails_over_but_not_after_semantic_rejection ... ok
+test mintlayer::api_client::tests::submit_transaction_rejects_response_txid_mismatch ... ok
+test mintlayer::api_client::tests::submit_transaction_stops_after_invalid_success_body_because_outcome_is_unknown ... ok
+test mintlayer::api_client::tests::submit_transaction_stops_after_server_error_because_outcome_is_unknown ... ok
+test mintlayer::api_client::tests::submit_transaction_stops_after_transport_error_because_outcome_is_unknown ... ok
+test mintlayer::api_client::tests::truncate_http_error_body ... ok
+test mintlayer::api_client::tests::transaction_with_tx_hex_skips_endpoint_without_capability ... ok
+test mintlayer::api_client::tests::unrelated_address_404_remains_an_error ... ok
+test mintlayer::broadcast::tests::rejects_invalid_hex_before_contacting_the_node ... ok
+test mintlayer::broadcast::tests::preserves_node_rejection_as_an_error ... ok
+test mintlayer::broadcast::tests::submits_signed_hex_through_p2p_rpc_with_trusted_policy ... ok
+test mintlayer::coin::tests::accept_matching_api_genesis_block_id_case_insensitively ... ok
+test mintlayer::coin::tests::activation_confirmations_override_configuration ... ok
+test mintlayer::coin::tests::build_valid_coin ... ok
+test mintlayer::coin::tests::build_global_hd_identity_at_default_address_path ... ok
+test mintlayer::coin::tests::check_if_my_payment_sent_recovers_canonical_payment ... ok
+test mintlayer::coin::tests::convert_address_info_to_coin_balance ... ok
+test mintlayer::coin::tests::converts_mintlayer_decimal_amounts_to_atoms_exactly ... ok
+test mintlayer::coin::tests::debug_redacts_private_key ... ok
+test mintlayer::coin::tests::htlc_public_key_matches_local_identity ... ok
+test mintlayer::coin::tests::check_if_my_payment_sent_respects_search_from_block ... ok
+test mintlayer::coin::tests::htlc_refund_swapops_builds_broadcasts_without_revealing_secret ... ok
+test mintlayer::coin::tests::htlc_spend_swapops_builds_broadcasts_and_reveals_secret ... ok
+test mintlayer::coin::tests::htlc_spend_observer_recovers_canonical_spender ... ok
+test mintlayer::coin::tests::maps_every_kdf_mintlayer_network_to_sdk ... ok
+test mintlayer::coin::tests::mintlayer_confirmation_count_counts_from_inclusion_block ... ok
+test mintlayer::coin::tests::maker_payment_swapops_builds_broadcasts_and_returns_native_htlc ... ok
+test mintlayer::coin::tests::mintlayer_receiver_trade_fee_matches_canonical_htlc_spend_fee ... ok
+test mintlayer::coin::tests::mintlayer_legacy_trade_fee_matches_sender_planner ... ok
+test mintlayer::coin::tests::mintlayer_send_taker_fee_builds_and_broadcasts_canonical_transaction ... ok
+test mintlayer::coin::tests::mintlayer_sender_trade_fee_exact_matches_canonical_planner_fee ... ok
+test mintlayer::coin::tests::mintlayer_sender_trade_fee_upper_bound_covers_full_balance ... ok
+test mintlayer::coin::tests::mintlayer_sender_trade_fee_respects_fee_approx_stage ... ok
+test mintlayer::coin::tests::mintlayer_sender_trade_fee_upper_bound_is_monotonic ... ok
+test mintlayer::coin::tests::mintlayer_sender_trade_fee_upper_bound_rejects_budget_below_change_fee ... ok
+test mintlayer::coin::tests::mintlayer_sender_trade_fee_upper_bound_rejects_budget_below_fee ... ok
+test mintlayer::coin::tests::mintlayer_taker_fee_builder_creates_dex_transfer ... ok
+test mintlayer::coin::tests::mintlayer_taker_fee_trade_fee_matches_canonical_planner_fee ... ok
+test mintlayer::coin::tests::mintlayer_taker_fee_trade_fee_respects_fee_approx_stage ... ok
+test mintlayer::coin::tests::mintlayer_transaction_confirmations_uses_scanner_and_node_heights ... ok
+test mintlayer::coin::tests::mintlayer_validate_fee_accepts_canonical_dex_fee ... ok
+test mintlayer::coin::tests::mintlayer_sender_trade_fee_upper_bound_split_utxos ... ok
+test mintlayer::coin::tests::mintlayer_validate_fee_rejects_insufficient_amount ... ok
+test mintlayer::coin::tests::mintlayer_validate_fee_rejects_old_block ... ok
+test mintlayer::coin::tests::mintlayer_validate_fee_rejects_wrong_sender ... ok
+test mintlayer::coin::tests::mintlayer_validate_fee_retries_transaction_not_found ... ok
+test mintlayer::coin::tests::mmcoin_protocol_support_accepts_native_swap_negotiation ... ok
+test mintlayer::coin::tests::mmcoin_validates_local_address ... ok
+test mintlayer::coin::tests::mmcoin_wallet_only_follows_kdf_config ... ok
+test mintlayer::coin::tests::mmcoin_withdraw_broadcasts_exact_signed_transaction_when_requested ... ok
+test mintlayer::coin::tests::mintlayer_validate_fee_retries_unconfirmed_transaction ... ok
+test mintlayer::coin::tests::mmcoin_withdraw_rejects_unsupported_requests_before_network ... ok
+test mintlayer::coin::tests::node_rpc_configuration_is_optional_and_loopback_only ... ok
+test mintlayer::coin::tests::node_rpc_cookie_auth_is_reloaded_and_sent_on_wire ... ok
+test mintlayer::coin::tests::reject_duplicate_urls_after_normalization ... ok
+test mintlayer::coin::tests::reject_inconsistent_address_info_balance ... ok
+test mintlayer::coin::tests::reject_invalid_api_genesis_block_id ... ok
+test mintlayer::coin::tests::reject_invalid_genesis_block_id ... ok
+test mintlayer::coin::tests::reject_remote_plain_http ... ok
+test mintlayer::coin::tests::reject_trezor_private_key_policy ... ok
+test mintlayer::coin::tests::reject_unexpected_api_genesis_block_id ... ok
+test mintlayer::coin::tests::reject_url_credentials ... ok
+test mintlayer::coin::tests::reject_zero_confirmations_in_setter ... ok
+test mintlayer::coin::tests::mmcoin_withdraw_builds_signed_transaction_from_loopback_api ... ok
+test mintlayer::coin::tests::send_raw_tx_bytes_uses_canonical_txid_and_https_broadcaster ... ok
+test mintlayer::coin::tests::swap_payment_builder_produces_native_htlc_without_broadcast ... ok
+test mintlayer::coin::tests::swap_payment_validation_accepts_other_wallet ... ok
+test mintlayer::coin::tests::swap_payment_verifier_accepts_valid_and_rejects_mismatches ... ok
+test mintlayer::coin::tests::taker_payment_swapops_builds_broadcasts_and_returns_native_htlc ... ok
+test mintlayer::coin::tests::transaction_data_broadcast_orchestrator_preserves_bytes_and_canonical_txid ... ok
+test mintlayer::coin::tests::tx_enum_from_bytes_roundtrips_and_rejects_invalid_bytes ... ok
+test mintlayer::coin::tests::wait_for_confirmations_accepts_confirmed_payment_and_times_out ... ok
+test mintlayer::coin::tests::wait_for_htlc_tx_spend_times_out_when_unspent ... ok
+test mintlayer::config::tests::deserialize_activation_request_with_defaults ... ok
+test mintlayer::config::tests::deserialize_all_supported_networks ... ok
+test mintlayer::config::tests::deserialize_coin_configuration ... ok
+test mintlayer::config::tests::reject_unknown_network ... ok
+test mintlayer::fee::tests::compute_fee_uses_canonical_ceiling_rounding ... ok
+test mintlayer::fee::tests::compute_observed_mainnet_fee_for_offline_transaction_sizes ... ok
+test mintlayer::fee::tests::deserialize_public_api_fee_rate_string ... ok
+test mintlayer::fee::tests::real_point_one_ml_utxo_cannot_cover_mainnet_fee ... ok
+test mintlayer::fee::tests::reject_non_string_and_invalid_fee_rates ... ok
+test mintlayer::fee::tests::report_fee_and_required_amount_overflow ... ok
+test mintlayer::htlc::tests::accepts_exact_kdf_dhash160_and_rejects_other_lengths ... ok
+test mintlayer::htlc::tests::builds_native_htlc_with_absolute_time_lock ... ok
+test mintlayer::htlc::tests::refunds_native_htlc_without_revealing_secret ... ok
+test mintlayer::htlc::tests::spends_native_htlc_and_extracts_original_secret ... ok
+test mintlayer::coin::tests::wait_for_htlc_tx_spend_returns_canonical_spender ... ok
+test mintlayer::transaction::tests::absorbs_small_residue_without_creating_change ... ok
+test mintlayer::transaction::tests::mintlayer_transaction_roundtrips_through_kdf_transaction_enum ... ok
+test mintlayer::transaction::tests::plans_and_signs_canonical_transaction_without_submission ... ok
+test mintlayer::transaction::tests::plans_and_signs_htlc_output_offline ... ok
+test mintlayer::transaction::tests::plans_signed_htlc_refund_with_canonical_fee_without_revealing_secret ... ok
+test mintlayer::transaction::tests::plans_signed_htlc_spend_with_canonical_fee_and_extractable_secret ... ok
+test mintlayer::transaction::tests::recovers_canonical_transaction_id_from_signed_bytes ... ok
+test mintlayer::transaction::tests::rejects_invalid_htlc_resolution_inputs ... ok
+test mintlayer::types::tests::accept_equivalent_decimal_with_trailing_zeroes ... ok
+test mintlayer::types::tests::convert_consistent_amount_to_big_decimal ... ok
+test mintlayer::types::tests::deserialize_address_info ... ok
+test mintlayer::types::tests::deserialize_chain_tip ... ok
+test mintlayer::types::tests::deserialize_genesis_info_ignores_unneeded_fields ... ok
+test mintlayer::types::tests::deserialize_htlc_transaction_output ... ok
+test mintlayer::types::tests::deserialize_spendable_utxo ... ok
+test mintlayer::types::tests::reject_inconsistent_amount_representations ... ok
+test mintlayer::types::tests::reject_invalid_atoms_amount ... ok
+test mintlayer::types::tests::reject_invalid_decimal_amount ... ok
+test mintlayer::types::tests::reject_negative_amount ... ok
+test mintlayer::utxo::tests::ignores_non_coin_outputs ... ok
+test mintlayer::utxo::tests::rejects_invalid_source_id ... ok
+test mintlayer::utxo::tests::reports_insufficient_funds ... ok
+test mintlayer::utxo::tests::selection_order_is_independent_from_api_order ... ok
+test mintlayer::utxo::tests::selects_real_mainnet_utxo_vector ... ok
+test mintlayer::transaction::tests::rejects_zero_amount_and_mismatched_key ... ok
+
+test result: ok. 141 passed; 0 failed; 0 ignored; 0 measured; 392 filtered out; finished in 3.35s
+

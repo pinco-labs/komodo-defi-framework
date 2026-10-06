@@ -1,0 +1,44 @@
+captured_utc=2026-10-06T06:24:18Z
+base_commit=e686ef3500585f01c9f0e89c8c01bc036c42253c
+candidate_tree=387c3b8292a301ed45ed8da32ed9f0bf4bafebe4
+rustc 1.97.1 (8bab26f4f 2026-07-14)
+cargo 1.97.1 (c980f4866 2026-06-30)
+FORMAT_EXIT=1
+
+clippy_command=cargo clippy --locked --offline -j 2 -p coins --all-targets --no-deps -- -D warnings
+clippy_exit=101
+clippy_log=<HOME>/kdf-mintlayer-pr-checks.r3OdS5/clippy-coins-strict.437OE2.log
+e0346055b0edccb8ff5f079a596a97644212f9ea3a657c2cf720d0dacb1fe403  <HOME>/kdf-mintlayer-pr-checks.r3OdS5/clippy-coins-strict.437OE2.log
+
+CHECK=clippy-after-lint
+COMMAND=cargo clippy --locked --offline -j 2 -p coins --all-targets --no-deps -- -D warnings
+CLIPPY_EXIT=101
+LOG=<HOME>/kdf-mintlayer-pr-checks.r3OdS5/clippy-after-lint.7mZhs6.log
+8fd8a3d3fa35aff60d241167e4fefbdc911c9d39f19be6dd2177d8bfd6c3b809  <HOME>/kdf-mintlayer-pr-checks.r3OdS5/clippy-after-lint.7mZhs6.log
+4e0c8f75b8059a0a030d133b7655e1c5702e01320e240fc5b92082cdc14851f5  <HOME>/kdf-mintlayer-pr-checks.r3OdS5/candidate-lint.u0fugV.patch
+
+CHECK=mintlayer-unit-after-lint
+COMMAND=cargo test --locked --offline -j 2 -p coins --lib mintlayer:: -- --test-threads=2
+TEST_EXIT=0
+LOG=<HOME>/kdf-mintlayer-pr-checks.r3OdS5/mintlayer-unit-after-lint.thBkxp.log
+887c09eae8b30f6d66dd254804e65dc01b1b05ec223170dab7e16f0619803372  <HOME>/kdf-mintlayer-pr-checks.r3OdS5/mintlayer-unit-after-lint.thBkxp.log
+4e0c8f75b8059a0a030d133b7655e1c5702e01320e240fc5b92082cdc14851f5  <HOME>/kdf-mintlayer-pr-checks.r3OdS5/unit-tested-candidate.0g5eZT.patch
+
+CHECK=sdk-offline-after-lint
+COMMAND=cargo test --locked --offline -j 2 -p coins --test mintlayer_kdf_sdk_key_adapter --test mintlayer_sdk_offline_transaction -- --test-threads=2 
+TEST_EXIT=0
+LOG=<HOME>/kdf-mintlayer-pr-checks.r3OdS5/sdk-offline-after-lint.jfNfG3.log
+a685ad6d41a1ab3bbe64d913498ba66f237625b0c03ef0f2dbfe8b2eb2d5e444  <HOME>/kdf-mintlayer-pr-checks.r3OdS5/sdk-offline-after-lint.jfNfG3.log
+4e0c8f75b8059a0a030d133b7655e1c5702e01320e240fc5b92082cdc14851f5  <HOME>/kdf-mintlayer-pr-checks.r3OdS5/integration-tested-candidate.Mvio0Y.patch
+
+CHECK=api2-live-after-lint
+COMMAND=cargo test --locked --offline -j 2 -p coins --test mintlayer_api2_https_live -- --ignored --nocapture --test-threads=1 
+TEST_EXIT=0
+LOG=<HOME>/kdf-mintlayer-pr-checks.r3OdS5/api2-live-after-lint.aTnMvb.log
+c2b7058531e69f63dc09437294bcdaa59c178348c265fa66be5b5257d79fb371  <HOME>/kdf-mintlayer-pr-checks.r3OdS5/api2-live-after-lint.aTnMvb.log
+4e0c8f75b8059a0a030d133b7655e1c5702e01320e240fc5b92082cdc14851f5  <HOME>/kdf-mintlayer-pr-checks.r3OdS5/integration-tested-candidate.Mvio0Y.patch
+
+CHECK=validated-candidate-staged
+captured_utc=2026-10-06T10:36:46Z
+BASE=e686ef3500585f01c9f0e89c8c01bc036c42253c
+CANDIDATE_TREE=56e948699246f5be89d0bd22bd98202dba3a40be

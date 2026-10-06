@@ -1,0 +1,25 @@
+warning: type alias `StaticAddressBytes` is never used
+  --> mm2src/trezor/src/eth/eth_command.rs:27:6
+   |
+27 | type StaticAddressBytes = &'static [u8];
+   |      ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `trezor` (lib) generated 1 warning
+   Compiling coins v0.1.0 (<HOME>/kdf-mintlayer-gleec-pr/mm2src/coins)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.21s
+warning: the following packages contain code that will be rejected by a future version of Rust: nom v6.1.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running tests/mintlayer_api2_https_live.rs (<HOME>/kdf-mintlayer-native-swaps/target/debug/deps/mintlayer_api2_https_live-951d9d223fb42011)
+
+running 2 tests
+test mintlayer_api2_after_unavailable_primary_live_golden ... GOLDEN: 210 bytes; ASCII SHA256, RAW SHA256 and canonical txid PASS
+FAILOVER: simulated primary GET -> HTTP 503 -> real API2 HTTPS -> golden PASS
+ok
+test mintlayer_api2_only_live_golden ... GOLDEN: 210 bytes; ASCII SHA256, RAW SHA256 and canonical txid PASS
+API2_ONLY: PASS via KDF production HTTP transport
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+

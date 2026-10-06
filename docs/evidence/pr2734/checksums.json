@@ -1,0 +1,50 @@
+[
+  {
+    "original_name": "provenance.txt",
+    "original_sha256": "b85abc514ec42c0cd8554ce6cc56964233864e1682ea4dbe77ad0d54b6ad5e03",
+    "published_name": "candidate-provenance.txt",
+    "published_sha256": "6c5e279222dc91c14325ec3926f3b9ed949ef30f95f16482e4503f076bd2494e"
+  },
+  {
+    "original_name": "provenance(1).txt",
+    "original_sha256": "e188f84d5516c65d5ee2bc4218d0e8ad4131df6ac4b7d4bc098ccac9d345eeaa",
+    "published_name": "baseline-provenance.txt",
+    "published_sha256": "2f1892792885fd916d4e675847d71463ef85758a5c1e1c5f5e0bb73c8464baac"
+  },
+  {
+    "original_name": "format-check.log",
+    "original_sha256": "5d803556f9405ce730b9440e3ad4a1454c7b4bbde0abeca348c9957b1b72e59f",
+    "published_name": "format-check.log",
+    "published_sha256": "74672c3ed222024cceb4e1cb4553b00660a95477e3c5e4f58e51187b2f031843"
+  },
+  {
+    "original_name": "mintlayer-unit-after-lint.thBkxp.log",
+    "original_sha256": "887c09eae8b30f6d66dd254804e65dc01b1b05ec223170dab7e16f0619803372",
+    "published_name": "mintlayer-unit.log",
+    "published_sha256": "39c6743854b10dac6447dcb9cb93c0f84edd3c50104a0232a59739e5480499e1"
+  },
+  {
+    "original_name": "sdk-offline-after-lint.jfNfG3.log",
+    "original_sha256": "a685ad6d41a1ab3bbe64d913498ba66f237625b0c03ef0f2dbfe8b2eb2d5e444",
+    "published_name": "sdk-offline.log",
+    "published_sha256": "2e4f322a7638129a1e9c30b5fc5d5516b5f564158be43dabd600dcf8aa6f838b"
+  },
+  {
+    "original_name": "api2-live-after-lint.aTnMvb.log",
+    "original_sha256": "c2b7058531e69f63dc09437294bcdaa59c178348c265fa66be5b5257d79fb371",
+    "published_name": "api2-live.log",
+    "published_sha256": "3ba5613a9422c9e0d01596f8e564171216038339c4c950a897d70cdc6dabbf0f"
+  },
+  {
+    "original_name": "clippy-after-lint.7mZhs6.log",
+    "original_sha256": "8fd8a3d3fa35aff60d241167e4fefbdc911c9d39f19be6dd2177d8bfd6c3b809",
+    "published_name": "clippy-candidate.log",
+    "published_sha256": "9ba8efa5b6ade31858f7e969f62b0caf96bcb850fc7ba0cc12731dfa1d2c69ae"
+  },
+  {
+    "original_name": "clippy-dev-baseline.UjUqQ0.log",
+    "original_sha256": "ae9526d6377f5d0849b1f65220b7945c17ce0c1094e3fb92aea724b6e09abf22",
+    "published_name": "clippy-baseline.log",
+    "published_sha256": "58c3c5f2f029a49d6a0d8a76783bffbc3dda32f6bdc6d301ab0dad9656132173"
+  }
+]
